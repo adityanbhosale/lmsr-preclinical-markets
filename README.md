@@ -12,7 +12,7 @@ A mechanism design research project applying the **Liquidity-Sensitive Logarithm
 Generative drug discovery platforms now produce candidates faster than any evaluation infrastructure can validate them. Each molecule carries a probability distribution over downstream clinical success, but virtually none receives independent analytical infrastructure. Every internal triage decision relies on the same computational models that generated the candidates — there is no adversarial check, no calibration against external judgment, no market mechanism to surface systematic overconfidence.
 
 |  | Value |
-|--|--|
+| --- | --- |
 | Cost per IND-enabling program | $2–5M committed before independent probability assessment exists |
 | AI-generated candidates without external evaluation | ~90% receive no systematic external signal before triage |
 | Independent price signals for pre-IND assets | 0 |
@@ -41,13 +41,9 @@ High-confidence molecules get low `α` (tight markets, resistant to large swings
 
 ### 2. The Cold-Start Problem
 
-Without an initial position, `q = (0, 0)` at market open. Every molecule opens at 50/50 regardless of computational signal:
+Without an initial position, `q = (0, 0)` at market open would make `b = α · 0 = 0`, producing an undefined cost function. In the degenerate limit as q → 0, every molecule opens at 50/50 regardless of computational signal — uninformative for a molecule with `confidence_score = 0.71` and one with `score = 0.20` alike.
 
-```
-p_yes = exp(0/b) / (exp(0/b) + exp(0/b)) = 0.5
-```
-
-This is uninformative. A molecule with `confidence_score = 0.71` opens identically to one with `score = 0.20`.
+*In practice, markets initialize at `q = (0.01, 0.01)` to keep `b` well-defined. This produces p ≈ 0.5 and is immediately overridden by ABMM seeding.*
 
 ### 3. Automated Bioactivity Market Maker (ABMM)
 
@@ -107,7 +103,7 @@ where:
 
 **Open question 1:** Does the exponential retreat function preserve approximate incentive-compatibility in the sense of Theorem 3.4 (Bahrani et al., 2023)?
 
-**Open question 2:** What is the optimal λ as a closed-form function of (α, confidence_score, modality)?
+**Open question 2:** What is the optimal λ as a closed-form function of (α, confidence\_score, modality)?
 
 **Open question 3:** Does calibration-weighted `ldi_calibrated` produce strictly better incentive-compatibility properties than volume-weighted `ldi` under all conditions?
 
@@ -137,8 +133,6 @@ lmsr-preclinical-markets/
 │   └── retreat_functions.py  # Linear vs exponential retreat comparison
 ├── notebooks/
 │   └── mechanism_demo.ipynb  # Interactive walkthrough with visualizations
-├── api/
-│   └── main.py               # FastAPI backend (credentials scrubbed)
 ├── docs/
 │   └── mechanism.md          # Extended formal write-up
 ├── .env.example
@@ -151,10 +145,9 @@ lmsr-preclinical-markets/
 ## Installation
 
 ```bash
-git clone https://github.com/adityanb/lmsr-preclinical-markets
+git clone https://github.com/adityanbhosale/lmsr-preclinical-markets
 cd lmsr-preclinical-markets
 pip install -r requirements.txt
-cp .env.example .env  # fill in your credentials
 ```
 
 To run the mechanism demo:
@@ -163,17 +156,11 @@ To run the mechanism demo:
 jupyter notebook notebooks/mechanism_demo.ipynb
 ```
 
-To start the API:
-
-```bash
-uvicorn api.main:app --reload
-```
-
 ---
 
 ## References
 
-1. Othman, A., Sandholm, T., Pennock, D. M., & Reeves, D. M. (2010). A practical liquidity-sensitive automated market maker. *ACM EC '10*, 377–386.
+1. Othman, A., Sandholm, T., Pennock, D. M., & Reeves, D. M. (2013). A practical liquidity-sensitive automated market maker. *ACM Transactions on Economics and Computation*, 1(3).
 2. Hanson, R. (2003). Combinatorial information market design. *Information Systems Frontiers*, 5(1), 107–119.
 3. Bahrani, M., Garimidi, P., & Roughgarden, T. (2023). Transaction fee mechanism design with active block producers. *arXiv:2307.01686*.
 4. Roughgarden, T., & Neyman, E. (2023). From proper scoring rules to max-min optimal forecast aggregation. *Operations Research*.
