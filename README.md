@@ -81,6 +81,27 @@ This makes retreat responsive to signal quality, not just signal quantity.
 
 ---
 
+## Retrospective Simulation
+
+To test whether the mechanism produces probability estimates that outperform raw computational priors, we simulated four molecules with known clinical outcomes against a synthetic credentialed expert population.
+
+| Molecule | Modality | Conf. Score | α | Outcome |
+|---|---|---|---|---|
+| Sotorasib (AMG-510) | KRAS G12C inhibitor | 0.81 | 0.019 | Approved (FDA, May 2021) |
+| Vepdegestrant (ARV-471) | ER PROTAC degrader | 0.73 | 0.025 | NDA filed (June 2025) |
+| Adagrasib (MRTX-849) | KRAS G12C inhibitor | 0.76 | 0.023 | Approved (FDA, Dec 2022) |
+| BI 1701963 | SOS1::KRAS PPI inhibitor | 0.48 | 0.044 | Terminated (2023) |
+
+**Result: mean Brier score improvement of +0.2208** across all four markets — the mechanism outperformed raw ABMM priors overall. The largest improvement was on adagrasib (+0.2799), where the prior was least accurate relative to outcome. Negative improvement on sotorasib and vepdegestrant is expected — their ABMM priors were already near-correct, so expert noise added marginal variance rather than signal.
+
+![Price paths](figures/backtest_price_paths.png)
+
+Full methodology, molecule profiles, and confidence score derivations: [`docs/backtest_candidates.md`](docs/backtest_candidates.md)  
+Detailed results and interpretation: [`docs/backtest_results.md`](docs/backtest_results.md)  
+Simulation notebook: [`notebooks/backtest_demo.ipynb`](notebooks/backtest_demo.ipynb)
+
+---
+
 ## Open Theoretical Questions
 
 ### Incentive-Compatibility Under ABMM Dominance
@@ -132,9 +153,16 @@ lmsr-preclinical-markets/
 │   ├── lmsr_prior.py         # ABMM seeding + calibration-weighted retreat
 │   └── retreat_functions.py  # Linear vs exponential retreat comparison
 ├── notebooks/
-│   └── mechanism_demo.ipynb  # Interactive walkthrough with visualizations
+│   ├── mechanism_demo.ipynb  # Interactive mechanism walkthrough
+│   └── backtest_demo.ipynb   # Retrospective simulation (4 molecules)
 ├── docs/
-│   └── mechanism.md          # Extended formal write-up
+│   ├── mechanism.md          # Extended formal write-up
+│   ├── backtest_candidates.md # Molecule profiles, confidence scores, citations
+│   └── backtest_results.md   # Simulation results and interpretation
+├── figures/
+│   ├── backtest_price_paths.png
+│   ├── backtest_accuracy.png
+│   └── backtest_retreat.png
 ├── .env.example
 ├── requirements.txt
 └── LICENSE
@@ -154,6 +182,12 @@ To run the mechanism demo:
 
 ```bash
 jupyter notebook notebooks/mechanism_demo.ipynb
+```
+
+To run the retrospective simulation:
+
+```bash
+jupyter notebook notebooks/backtest_demo.ipynb
 ```
 
 ---
