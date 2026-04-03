@@ -3,7 +3,7 @@
 A mechanism design research project applying the **Liquidity-Sensitive Logarithmic Market Scoring Rule (LS-LMSR)** to preclinical milestone contracts for AI-generated therapeutics, with an **Automated Bioactivity Market Maker (ABMM)** that solves the cold-start problem for thin credentialed markets with no retail liquidity.
 
 **Live implementation:** [molecula-flame.vercel.app](https://molecula-flame.vercel.app)  
-**platform:** [platform-v2-umber.vercel.app/markets](https://platform-v2-umber.vercel.app/markets)
+**Expert platform:** [platform-v2-umber.vercel.app/markets](https://platform-v2-umber.vercel.app/markets)
 
 ---
 
