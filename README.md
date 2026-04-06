@@ -148,51 +148,48 @@ A working price oracle for pre-clinical assets enables three primitives that hav
 
 ### Figure 1 — LS-LMSR Price Surface
 ![LS-LMSR Price Surface](figures/diagram1_price_surface.png)
-*p_yes as a function of q_yes (q_no fixed at 40) for three values of α. 
-High-confidence molecules (low α) produce flat, stable curves resistant 
-to noise. Low-confidence molecules (high α) produce steep, responsive 
-curves that reward early expert signal.*
+
+*Diagrammatic representation of how the LS-LMSR prices a YES outcome as a function of outstanding YES contracts, for three molecules with different confidence scores yielding variable α. The x-axis is q_yes (how many YES contracts have been sold) and the y-axis is the implied probability of YES (the current price signal).*
+
+*α is derived from the oracle confidence score and controls how responsive the market is to new trades. A higher-confidence molecule (lower α) produces a flatter curve — higher trading volume moves price less, since the market is tighter and resistant to noise. A lower-confidence molecule (higher α) produces a steeper curve, since smaller trades move the price more significantly and the market is designed to be responsive to early signal when the prior is uncertain. The horizontal reference line shows where every market starts without ABMM seeding (50% uninformed prior), and where ARV-806's market opens after ABMM seeding at q_yes = 39.52 (41.9% YES based on prior). Essentially, we're shown why oracle-derived α is necessary — without it, every molecule would open on the same flat curve and expert signal wouldn't have a meaningful anchor to push against.*
 
 ---
 
 ### Figure 2 — The Cold-Start Problem
 ![Cold-Start Problem](figures/diagram2_cold_start.png)
-*Without ABMM seeding, the LS-LMSR at q=(0,0) collapses every opening 
-price to 50% regardless of oracle prior, and a single expert purchasing 
-Δq=1 moves the market by +50pp. With ABMM seeding at q=(39.52, 40.48), 
-the same trade moves price by only +7.2pp and the opening is anchored 
-to the computational prior.*
+
+*The x-axis is the oracle confidence score derived from the asset's computational profile. The y-axis is the opening YES price at market launch. Two curves are shown: the flat 50% dashed line (no ABMM seed) and the S-curve (with ABMM seeding).*
+
+*Without ABMM seeding, the LS-LMSR at near-zero quantities collapses to 50% for every molecule regardless of prior — the first expert trade would set the price unilaterally. With ABMM seeding, the opening price is anchored to the oracle prior through the effective confidence formula, producing the S-curve shown. ARV-806 (conf = 0.58) opens at 93.3% YES; molecules below the neutral prior (conf < ~0.50) open near zero. The S-curve's steepness reflects the α parameterization — low-confidence molecules have high α making their markets responsive to early signal, while high-confidence molecules have low α making them resistant to noise. The ABMM encodes this directly into the opening state.*
 
 ---
 
-### Figure 3 — Retreat Function Comparison
+### Figure 3 — The Retreat Function
 ![Retreat Function](figures/diagram3_retreat_function.png)
-*Exponential retreat w(t) = exp(−log(2)/0.35 × LDI) vs. linear and 
-convex alternatives. The exponential retreats faster than linear before 
-LDI ≈ 0.50 (maximising weight on early expert corrections) and slower 
-after it (maintaining a residual floor in structurally thin markets). 
-Right panel shows the ARV-806 simulated price path with ABMM influence 
-overlaid.*
+
+*Left panel plots ABMM influence w(t) against the Liquidity Depth Index (LDI) for three candidate retreat schedules. Right panel shows a simulated ARV-806 price path with ABMM influence overlaid on a secondary axis.*
+
+*The retreat function controls how quickly the ABMM relinquishes its initial position as credentialed expert volume accumulates. The exponential schedule w(t) = exp(−log(2)/0.35 × LDI) is preferred for two reasons: it retreats faster than linear before the crossover at LDI ≈ 0.50, giving early expert corrections maximum weight when disagreement with the prior is most valuable; and slower than linear after it, maintaining a residual floor that stabilizes markets where credentialed volume never fully saturates. The linear schedule hits zero completely, leaving no anchor in structurally thin markets. In the right panel, ARV-806's price path is initially constrained near the Hay et al. base rate while ABMM influence is high, then accelerates toward expert consensus as w(t) falls through the half-life. The transition point — where ABMM influence drops below 0.5 — is the boundary between prior-dominated and expert-dominated price discovery.*
+
+*Core open question: does the exponential parameterization satisfy the ε-IC condition — specifically, does w(t)·q_abmm ≤ δ(ε, α, p*) hold throughout the retreat, and is the bound tightest when expert correction is most needed?*
 
 ---
 
-### Figure 4 — TFM/ABMM Structural Analogy
+### Figure 4 — TFM / ABMM Structural Analogy
 ![TFM Analogy](figures/diagram4_tfm_analogy.png)
-*Row-by-row mapping of Bahrani, Garimidi & Roughgarden (2023) onto the 
-ABMM mechanism. Five rows are direct structural mappings. The two open-
-question rows — Theorem 3.1 impossibility and the Theorem 3.4 marginal 
-value bound w(t)·q_abmm ≤ δ(ε, α, p*) — are the formal proof targets 
-for subsequent work.*
+
+*The core argument is that the ABMM is structurally identical to an active block producer in the sense of Bahrani, Garimidi & Roughgarden (2023) — it holds a large initial position with a private valuation (the computational prior), participates in the same mechanism as the agents it's meant to serve (credentialed experts), and its presence necessarily distorts incentive-compatibility for those agents. The impossibility result therefore applies by structural analogy: no retreat function can make the ABMM simultaneously DSIC and BPIC in all cases. The question is whether the distortion is bounded.*
+
+*The table maps each TFM concept onto the ABMM mechanism directly. Five rows are clean structural mappings. The two open-question rows — Theorem 3.1 impossibility and the Theorem 3.4 marginal value bound w(t)·q_abmm ≤ δ(ε, α, p*) — are the formal proof targets for subsequent work.*
 
 ---
 
 ### Figure 5 — ε-IC Distortion Under ABMM Dominance
 ![IC Distortion](figures/diagram5_ic_distortion.png)
-*Cost of truthful reporting as a function of LDI for an expert with true 
-belief p*=0.70 against ABMM prior p_abmm=0.42. Distortion is highest at 
-low LDI when ABMM dominance is total — precisely when expert correction 
-is most valuable. Right panel shows the full cost surface over (LDI, p*); 
-the open question is whether w(t)·q_abmm ≤ δ(ε, α, p*) holds throughout.*
+
+*Left panel shows the cost of truthful reporting as a function of LDI for an expert whose true belief (p* = 0.70) diverges from the ABMM-seeded prior (p_abmm = 0.42). Right panel shows the full cost surface over (LDI, p*). The cost is highest at LDI = 0 when ABMM dominance is total and falls as w(t) decreases and the market opens up.*
+
+*The key insight is that the distortion is worst precisely when accurate correction is most valuable — early, when the prior is most uncertain and expert signal is scarcest. An expert who agrees with the prior pays almost nothing to report truthfully regardless of LDI. An expert who strongly disagrees faces the steepest early-trading penalty. The cost surface makes this concrete: the top-left corner (low LDI, high |p* − p_abmm|) is the high-distortion regime; the bottom-right (high LDI, p* near p_abmm) costs almost nothing. The formal question is whether the exponential retreat keeps the entire surface below the bound δ(ε, α, p*) — and whether that bound can be derived from Theorem 3.4.*
 
 ---
 
