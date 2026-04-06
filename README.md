@@ -144,6 +144,58 @@ A working price oracle for pre-clinical assets enables three primitives that hav
 
 ---
 
+## Visualizations
+
+### Figure 1 — LS-LMSR Price Surface
+![LS-LMSR Price Surface](figures/diagram1_price_surface.png)
+*p_yes as a function of q_yes (q_no fixed at 40) for three values of α. 
+High-confidence molecules (low α) produce flat, stable curves resistant 
+to noise. Low-confidence molecules (high α) produce steep, responsive 
+curves that reward early expert signal.*
+
+---
+
+### Figure 2 — The Cold-Start Problem
+![Cold-Start Problem](figures/diagram2_cold_start.png)
+*Without ABMM seeding, the LS-LMSR at q=(0,0) collapses every opening 
+price to 50% regardless of oracle prior, and a single expert purchasing 
+Δq=1 moves the market by +50pp. With ABMM seeding at q=(39.52, 40.48), 
+the same trade moves price by only +7.2pp and the opening is anchored 
+to the computational prior.*
+
+---
+
+### Figure 3 — Retreat Function Comparison
+![Retreat Function](figures/diagram3_retreat_function.png)
+*Exponential retreat w(t) = exp(−log(2)/0.35 × LDI) vs. linear and 
+convex alternatives. The exponential retreats faster than linear before 
+LDI ≈ 0.50 (maximising weight on early expert corrections) and slower 
+after it (maintaining a residual floor in structurally thin markets). 
+Right panel shows the ARV-806 simulated price path with ABMM influence 
+overlaid.*
+
+---
+
+### Figure 4 — TFM/ABMM Structural Analogy
+![TFM Analogy](figures/diagram4_tfm_analogy.png)
+*Row-by-row mapping of Bahrani, Garimidi & Roughgarden (2023) onto the 
+ABMM mechanism. Five rows are direct structural mappings. The two open-
+question rows — Theorem 3.1 impossibility and the Theorem 3.4 marginal 
+value bound w(t)·q_abmm ≤ δ(ε, α, p*) — are the formal proof targets 
+for subsequent work.*
+
+---
+
+### Figure 5 — ε-IC Distortion Under ABMM Dominance
+![IC Distortion](figures/diagram5_ic_distortion.png)
+*Cost of truthful reporting as a function of LDI for an expert with true 
+belief p*=0.70 against ABMM prior p_abmm=0.42. Distortion is highest at 
+low LDI when ABMM dominance is total — precisely when expert correction 
+is most valuable. Right panel shows the full cost surface over (LDI, p*); 
+the open question is whether w(t)·q_abmm ≤ δ(ε, α, p*) holds throughout.*
+
+---
+
 ## Repository Structure
 
 ```
