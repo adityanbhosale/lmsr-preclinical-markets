@@ -253,3 +253,139 @@ plt.savefig('figures/diagram3_retreat_function.pdf', bbox_inches='tight')
 plt.savefig('figures/diagram3_retreat_function.png', dpi=150, bbox_inches='tight')
 plt.show()
 print("Saved to figures/diagram3_retreat_function.pdf and .png")
+
+
+
+# DIAGRAM 5 — The Retreat Under ABMM Dominance
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+def lslmsr_price(q_yes, q_no, alpha):
+    b = alpha * (q_yes + q_no)
+    return np.exp(q_yes/b) / (np.exp(q_yes/b) + np.exp(q_no/b))
+
+def lslmsr_cost(q_yes, q_no, alpha):
+    b = alpha * (q_yes + q_no)
+    return b * np.log(np.exp(q_yes/b) + np.exp(q_no/b))
+
+def cost_to_move(q_yes, q_no, alpha, p_target):
+    """Cost for expert to move market from current price to p_target."""
+    b_old   = alpha * (q_yes + q_no)
+    c_old   = lslmsr_cost(q_yes, q_no, alpha)
+    # solve for q_yes_new such that price = p_target
+    # p = exp(qy/b) / (exp(qy/b)+exp(qn/b)) => qy_new = qn + b*log(p/(1-p))
+    # but b changes with qy_new, so iterate
+    q_yes_new = q_yes
+    for _ in range(500):
+        b = alpha * (q_yes_new + q_no)
+        q_yes_new = q_no + b * np.log(p_target / (1 - p_target))
+    c_new = lslmsr_cost(q_yes_new, q_no, alpha)
+    return max(0.0, c_new - c_old)
+
+# Parameters
+p_star    = 0.70     # expert's true belief
+p_abmm    = 0.42     # ABMM-seeded prior
+alpha_ex  = 0.04325  # conf≈0.49 molecule
+beta      = 80       # seeding scale
+ldi_half  = 0.35
+
+ldi_range = np.linspace(0.0, 1.0, 200)
+
+def w_exp(ldi):
+    return np.exp(-np.log(2) / ldi_half * ldi)
+
+# At each LDI, ABMM holds w(ldi) fraction of its initial stake
+# q_abmm_yes = p_abmm * beta * w(ldi), q_abmm_no = (1-p_abmm)*beta*w(ldi)
+# Expert trades on top of this residual ABMM position
+costs_truthful = []
+costs_agree    = []    # expert who agrees with prior: p* ≈ p_abmm
+costs_disagree = []    # expert who strongly disagrees: p* = 0.85
+
+for ldi in ldi_range:
+    w = w_exp(ldi)
+    qy = p_abmm * beta * w
+    qn = (1 - p_abmm) * beta * w
+
+    costs_truthful.append(cost_to_move(qy, qn, alpha_ex, p_star))
+    costs_agree.append(cost_to_move(qy, qn, alpha_ex, p_abmm + 0.02))
+    costs_disagree.append(cost_to_move(qy, qn, alpha_ex, 0.85))
+
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6))
+
+# ── Panel A: cost of truthful reporting vs LDI ───────────────────────────
+ax1.plot(ldi_range, costs_truthful, color='#3fb950', linewidth=2.5,
+         label=f'p* = {p_star}  vs  p_abmm = {p_abmm}  (disagreement)')
+ax1.plot(ldi_range, costs_disagree, color='#f78166', linewidth=2.0,
+         linestyle='--', label='p* = 0.85  (strong disagreement)')
+ax1.plot(ldi_range, costs_agree,    color='#8b949e', linewidth=2.0,
+         linestyle=':',  label=f'p* ≈ p_abmm  (agrees with prior)')
+
+# Mark half-life
+ldi_hl   = ldi_half
+cost_hl  = cost_to_move(p_abmm*beta*w_exp(ldi_hl),
+                         (1-p_abmm)*beta*w_exp(ldi_hl),
+                         alpha_ex, p_star)
+ax1.scatter([ldi_hl], [cost_hl], color='#3fb950', zorder=5, s=70)
+ax1.axvline(ldi_hl, color='#3fb950', linewidth=1.0, linestyle=':', alpha=0.6)
+ax1.annotate(f'ABMM half-life\nLDI = {ldi_hl}',
+             xy=(ldi_hl, cost_hl), xytext=(ldi_hl + 0.07, cost_hl + 0.4),
+             fontsize=10, color='#3fb950',
+             arrowprops=dict(arrowstyle='->', color='#3fb950', lw=1.1))
+
+# Shade high-distortion region
+ax1.axvspan(0, ldi_hl, alpha=0.06, color='#f78166',
+            label='_nolegend_')
+ax1.text(ldi_hl / 2, ax1.get_ylim()[1] * 0.88 if costs_truthful[0] > 0 else 1.2,
+         'High distortion\nregion',
+         ha='center', fontsize=9.5, color='#f78166',
+         bbox=dict(boxstyle='round,pad=0.3', fc='white', ec='#f78166', alpha=0.85))
+
+ax1.set_xlabel('LDI  (credentialed volume / total volume)', fontsize=13)
+ax1.set_ylabel('Cost of truthful reporting  Δ C(q)', fontsize=13)
+ax1.set_title('ε-IC Condition: Cost of Truthful Reporting vs. LDI\n'
+              'Distortion is worst early — when correction is most valuable',
+              fontsize=12)
+ax1.legend(fontsize=10)
+ax1.set_xlim(-0.01, 1.01)
+ax1.grid(True, alpha=0.3)
+
+# ── Panel B: cost surface over (LDI, p*) ─────────────────────────────────
+p_targets  = np.linspace(0.44, 0.90, 60)
+ldi_grid   = np.linspace(0.0, 1.0, 60)
+LDI, PT    = np.meshgrid(ldi_grid, p_targets)
+Z          = np.zeros_like(LDI)
+
+for i, pt in enumerate(p_targets):
+    for j, ld in enumerate(ldi_grid):
+        w  = w_exp(ld)
+        qy = p_abmm * beta * w
+        qn = (1 - p_abmm) * beta * w
+        Z[i, j] = cost_to_move(qy, qn, alpha_ex, pt)
+
+contour = ax2.contourf(LDI, PT, Z, levels=16,
+                        cmap='RdYlGn_r', alpha=0.85)
+cbar = plt.colorbar(contour, ax=ax2, pad=0.02)
+cbar.set_label('Cost of truthful reporting  Δ C(q)', fontsize=10)
+
+# Mark the p*=0.70 case
+ax2.axhline(p_star, color='#3fb950', linewidth=1.5, linestyle='--',
+            label=f'p* = {p_star} (main case)')
+ax2.axvline(ldi_half, color='white', linewidth=1.0, linestyle=':',
+            alpha=0.7, label=f'LDI half-life = {ldi_half}')
+ax2.scatter([0], [p_star], color='#3fb950', zorder=5, s=80,
+            label=f'Maximum distortion point')
+
+ax2.set_xlabel('LDI  (credentialed volume / total volume)', fontsize=13)
+ax2.set_ylabel('Expert true belief  p*', fontsize=13)
+ax2.set_title(f'Cost Surface: f(LDI, p*)  with  p_abmm = {p_abmm}\n'
+              'Distortion peaks at low LDI and high |p* − p_abmm|',
+              fontsize=12)
+ax2.legend(fontsize=10, loc='lower right')
+ax2.grid(True, alpha=0.2)
+
+plt.tight_layout()
+plt.savefig('figures/diagram5_ic_distortion.pdf', bbox_inches='tight')
+plt.savefig('figures/diagram5_ic_distortion.png', dpi=150, bbox_inches='tight')
+plt.close()
+print("Saved to figures/diagram5_ic_distortion.pdf and .png")
