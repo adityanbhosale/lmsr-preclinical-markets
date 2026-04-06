@@ -254,7 +254,98 @@ plt.savefig('figures/diagram3_retreat_function.png', dpi=150, bbox_inches='tight
 plt.show()
 print("Saved to figures/diagram3_retreat_function.pdf and .png")
 
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 
+fig, ax = plt.subplots(figsize=(13, 6.5))
+ax.set_xlim(0, 1)
+ax.set_ylim(0, 1)
+ax.axis('off')
+fig.patch.set_facecolor('#0d1117')
+
+BG      = '#0d1117'
+HEADER  = '#161b22'
+BORDER  = '#30363d'
+C_CLEAN = '#1a3a2a'
+C_OPEN  = '#3a1a1a'
+C_LEG   = '#2d2a1a'
+GREEN   = '#3fb950'
+RED     = '#f78166'
+AMBER   = '#e3b341'
+WHITE   = '#e6edf3'
+MUTED   = '#8b949e'
+
+def cell(ax, x, y, w, h, fc, txt, tc=WHITE, fs=10, bold=False):
+    ax.add_patch(patches.Rectangle(
+        (x, y), w, h, lw=0.6, ec=BORDER, fc=fc, zorder=2))
+    ax.text(x + w/2, y + h/2, txt, ha='center', va='center',
+            fontsize=fs, color=tc, fontweight='bold' if bold else 'normal',
+            linespacing=1.5, zorder=3)
+
+# geometry
+ML, MR   = 0.02, 0.02
+CW       = [(1-ML-MR-0.012) * p for p in [0.37, 0.37, 0.22]]
+CX       = [ML, ML+CW[0]+0.006, ML+CW[0]+CW[1]+0.012]
+HDR_Y    = 0.845
+HDR_H    = 0.082
+N        = 7
+ROW_H    = (HDR_Y - 0.145) / N
+LEG_Y    = 0.030
+LEG_H    = 0.072
+
+# title
+ax.text(0.5, 0.955, 'The TFM/ABMM Structural Analogy',
+        ha='center', va='center', fontsize=14, fontweight='bold', color=WHITE)
+ax.text(0.5, 0.912, 'Mapping Bahrani, Garimidi & Roughgarden (2023) onto the MOLECULA/ABMM mechanism',
+        ha='center', va='center', fontsize=9.5, color=MUTED)
+
+# header
+for cx, cw, h in zip(CX, CW, ['TFM concept',
+                                'MOLECULA / ABMM analog',
+                                'Mapping status']):
+    cell(ax, cx, HDR_Y, cw, HDR_H, HEADER, h, fs=10.5, bold=True)
+
+# rows
+rows = [
+    ('Block producer',                       'ABMM',                              '✓  direct mapping', 'clean'),
+    ('Pending user transactions',            'Credentialed expert trades',        '✓  direct mapping', 'clean'),
+    ("Block producer's private valuation",   'Computational prior  p_abmm',      '✓  direct mapping', 'clean'),
+    ('Active BP position',                   'ABMM initial stake  q_abmm',       '✓  direct mapping', 'clean'),
+    ('BPIC distortion',                      'IC distortion for early experts',   '✓  direct mapping', 'clean'),
+    ('Theorem 3.1  impossibility',           'Parallel result (conjectured)',     '?  open question',  'open'),
+    ('Theorem 3.4  marginal value bound',    'w(t)·q_abmm ≤ δ(ε, α, p*)',        '?  open question',  'open'),
+]
+
+for i, (tfm, mdl, lbl, st) in enumerate(rows):
+    y  = HDR_Y - (i+1)*ROW_H
+    bg = C_CLEAN if st == 'clean' else C_OPEN
+    tc = GREEN   if st == 'clean' else RED
+    cell(ax, CX[0], y, CW[0], ROW_H, bg, tfm,  fs=10)
+    cell(ax, CX[1], y, CW[1], ROW_H, bg, mdl,  fs=10)
+    cell(ax, CX[2], y, CW[2], ROW_H, bg, lbl,  tc=tc, fs=9.5)
+
+# legend
+LEG_W = (sum(CW)+0.012 - 0.008) / 3
+for i, (lbl, bg, tc) in enumerate([
+        ('✓  direct mapping',  C_CLEAN, GREEN),
+        ('~  partial mapping', C_LEG,   AMBER),
+        ('?  open question',   C_OPEN,  RED)]):
+    lx = ML + i*(LEG_W + 0.004)
+    cell(ax, lx, LEG_Y, LEG_W, LEG_H, bg, lbl, tc=tc, fs=9.5)
+
+# footnote
+ax.text(0.5, 0.022,
+        'Open question rows are the formal proof target for subsequent work — '
+        'whether Theorem 3.1 applies to a continuous-time retreating agent, '
+        'and whether w(t)·q_abmm ≤ δ(ε, α, p*) can be derived from Theorem 3.4.',
+        ha='center', va='top', fontsize=8.2, color=MUTED, style='italic')
+
+import os; os.makedirs('figures', exist_ok=True)
+plt.tight_layout(pad=0.2)
+plt.savefig('figures/diagram4_tfm_analogy.pdf', bbox_inches='tight', facecolor='#0d1117')
+plt.savefig('figures/diagram4_tfm_analogy.png', dpi=150, bbox_inches='tight', facecolor='#0d1117')
+plt.close()
+print("Done.")
 
 # DIAGRAM 5 — The Retreat Under ABMM Dominance
 
