@@ -130,6 +130,24 @@ where:
 
 **Open question 4:** Should the oracle-attested computational score be treated as a proper scoring rule input (cf. Roughgarden & Neyman, 2023) or as a Bayesian prior updated by a separate mechanism?
 
+**Open question 5:** Given the model's docus on developing a tokenized RWA with a overlayed Prediction Market Layer where the underlying is tokenized as a security, what are the key next developemental steps:
+
+      Legal Foundation – i.e. what's being tokenized?
+          * Royalty Stream: % of future revenues (essentially a revenue participation agreement)
+          * Milestone Payment Rights: contractual right to receive payment upon a specific clinical event             (binary, time-bounded, directly maps to prediction market structure)
+          * Developement-stage equity – ownership stake in drug candidate or biotech entity. Most
+            complex, closest to traditional VC
+          * IP license right – tokenized share of licensing revenue from a patent or compound
+
+      Legal Questions:
+        1. DO the outcome shares (YES/NO tokens) constitute securities under the Securities Act or
+        derivatives under the CEA – and what's the enforcement risk of getting this wrong?
+        2. Which exemption is most viable for the underlying asset token – Reg D 506(c) accredited  
+        investors, general solicitation allowed) vs. Reg S (non-US persons, sidesteps SEC) vs. Reg A+
+        (broader base, slower)
+        3. Can the prediction market layer and the RWA layer be legally separated such that information
+        market participants are not deemed to hold the underlying security?
+
 ---
 
 ## Downstream DeFi Primitives
