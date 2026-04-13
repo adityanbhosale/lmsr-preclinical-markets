@@ -132,7 +132,9 @@ where:
 
 **Open question 5:** Given the model's docus on developing a tokenized RWA with a overlayed Prediction Market Layer where the underlying is tokenized as a security, what are the key next developemental steps:
 
-      Legal Foundation – i.e. what's being tokenized?
+**Phase 1:  **
+
+1. Legal Foundation – i.e. what's being tokenized?
           * Royalty Stream: % of future revenues (essentially a revenue participation agreement)
           * Milestone Payment Rights: contractual right to receive payment upon a specific clinical event             (binary, time-bounded, directly maps to prediction market structure)
           * Developement-stage equity – ownership stake in drug candidate or biotech entity. Most
@@ -147,6 +149,32 @@ where:
         (broader base, slower)
         3. Can the prediction market layer and the RWA layer be legally separated such that information
         market participants are not deemed to hold the underlying security?
+
+2. Legal Wrapper – SPV – Delaware LLC or LP created specifically to hold the underlying asset. Token holders have membership interests in the SPV. This is how Robinhood structured its OpenAI/SpaceX tokenized equity exposure and how most institutional tokenization platforms operate (Securitize, Centrifuge).
+
+**Phase 2:  **
+
+3. ERC-3643 implementation (T-REX) for the underlying asset token (production standard for permissioned security tokens).
+   * Identity Registry – maps wallet addresses to verified identity claims (accreditation status,
+     jurisdiction, sanctions screening). Integrates with an off-chain KYC provider (Persona, Jumio,
+     or Synaps, which is crypto-native).
+   * Compliance Module – smart contract which enforces transfer rules. Checks identiy registry on
+     every transfer. Enforces lock-up periods, jurisdiction restrictions, maximum holder counts (Reg D
+     has a 2,000 investor limit).
+   * Token Contract – ERC-3643 asset token itself, with transfer hooks that call the compliance
+     module.
+   * Claims Issuer – the trusted entity that signs identity claims (i.e. SPV admin or a third-party
+     KYC provider).
+
+Our LS-LMSR AMM woould essentially sit on top of this layer, interacting with the ERC-3643 token but maintaining its own contract architecture.
+
+4. Separate the information market layer cleanly – ensure that YES/NO outcome shares are not the underlying ERC-3643 security token – they're a derivative instrument that references it.
+   * keeps outcome shares outside securities law
+   * allows non-KYC'd participants to trade the information market while only KYC'd participants hold the      underlying asset
+   * preserves composability – outcome shares can potentially move freely while the underlying asset           remains permissioned
+  
+
+
 
 ---
 
