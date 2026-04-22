@@ -239,7 +239,21 @@ Our LS-LMSR AMM woould essentially sit on top of this layer, interacting with th
    * preserves composability – outcome shares can potentially move freely while the underlying asset           remains permissioned
   
 
+---
+## Testnet Reference Implementation
 
+A working Solidity implementation of the Layer 2 LS-LMSR automated market
+maker is deployed and live on Base Sepolia at
+[`0x747DF6BebC9A8fb208886270E5D333F79c48F812`](https://sepolia.basescan.org/address/0x747DF6BebC9A8fb208886270E5D333F79c48F812).
+The contract implements the LS-LMSR cost function, marginal pricing, and
+trading mechanics described in the whitepaper, using PRBMath's UD60x18
+fixed-point type for `exp`/`ln` operations. 14 unit tests pass, covering
+core math, input-domain boundaries, and state/access control
+(`contracts/test/LSLMSR.t.sol`).
+
+See [`docs/testnet-implementation.md`](docs/testnet-implementation.md) for
+deployment coordinates, architecture notes, test coverage detail, and a
+walkthrough of implementation decisions and roadblocks.
 
 ---
 
