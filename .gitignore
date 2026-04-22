@@ -1,1 +1,6 @@
 notebooks/.ipynb_checkpoints/
+
+# Foundry artifacts
+contracts/broadcast/
+contracts/cache/
+contracts/out/
