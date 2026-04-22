@@ -8,7 +8,10 @@ import { UD60x18, ud } from "@prb/math/UD60x18.sol";
 contract LSLMSRTest is Test {
     LSLMSR market;
 
-    // Set up a market with alpha=0.05, symmetric ABMM seeding (q_yes=q_no=100)
+    // Events to test for emission
+    event Trade(address indexed trader, bool isYes, UD60x18 shares, UD60x18 cost);
+    event Resolved(bool outcome);
+
     function setUp() public {
         market = new LSLMSR(
             ud(0.05e18),   // alpha = 0.05
@@ -18,20 +21,21 @@ contract LSLMSRTest is Test {
         );
     }
 
+    // ─────────────────────────────────────────────────────────────
+    // Original happy-path tests
+    // ─────────────────────────────────────────────────────────────
+
     function test_initialPriceIsFifty() public view {
-        // Symmetric seeding -> price should be exactly 0.5
         UD60x18 price = market.priceYes();
-        assertApproxEqAbs(price.unwrap(), 0.5e18, 1e15); // within 0.001
+        assertApproxEqAbs(price.unwrap(), 0.5e18, 1e15);
     }
 
     function test_buyYesIncreasesPrice() public {
         UD60x18 priceBefore = market.priceYes();
-        market.trade(true, ud(10e18)); // buy 10 YES shares
+        market.trade(true, ud(10e18));
         UD60x18 priceAfter = market.priceYes();
 
         assertGt(priceAfter.unwrap(), priceBefore.unwrap());
-        console2.log("price before:", priceBefore.unwrap());
-        console2.log("price after:", priceAfter.unwrap());
     }
 
     function test_costFunctionMonotonic() public {
@@ -53,7 +57,6 @@ contract LSLMSRTest is Test {
     }
 
     function test_asymmetricSeedingPriceMatches() public {
-        // Deploy a market with asymmetric ABMM seeding (q_yes=150, q_no=50)
         LSLMSR asymMarket = new LSLMSR(
             ud(0.05e18),
             ud(150e18),
@@ -62,12 +65,98 @@ contract LSLMSRTest is Test {
         );
 
         UD60x18 price = asymMarket.priceYes();
-        // Price should be > 0.5 because YES is seeded more heavily
         assertGt(price.unwrap(), 0.5e18);
+    }
 
-        // Compute expected price in Python: exp(150/10) / (exp(150/10) + exp(50/10))
-        // = exp(15) / (exp(15) + exp(5))
-        // ≈ 0.99995...
-        console2.log("asymmetric price:", price.unwrap());
+    // ─────────────────────────────────────────────────────────────
+    // Category A: Input-domain edge cases
+    // ─────────────────────────────────────────────────────────────
+
+   function test_constructorRevertsOnZeroSeed() public {
+    vm.expectRevert("qAbmmYes must be positive");
+        new LSLMSR(
+        ud(0.05e18),
+        ud(0),
+        ud(100e18),
+        address(this)
+        );
+    }
+
+    function test_constructorRevertsOnZeroAlpha() public {
+     vm.expectRevert("alpha must be positive");
+        new LSLMSR(
+        ud(0),
+        ud(100e18),
+        ud(100e18),
+        address(this)
+        );
+    } 
+
+    function test_constructorRevertsOnZeroResolver() public {
+     vm.expectRevert("resolver cannot be zero address");
+        new LSLMSR(
+        ud(0.05e18),
+        ud(100e18),
+        ud(100e18),
+        address(0)
+        );
+    }
+
+    function test_extremeImbalanceReverts() public {
+        // With alpha = 0.005 and q_yes = 1000, q_no = 1, the ratio q_yes/b
+        // exceeds PRBMath's exp() input ceiling (~133).
+        LSLMSR extremeMarket = new LSLMSR(
+            ud(0.005e18),
+            ud(1000e18),
+            ud(1e18),
+            address(this)
+        );
+
+        vm.expectRevert();
+        extremeMarket.priceYes();
+    }
+
+    function test_zeroSharesTradeIsNoOp() public {
+        UD60x18 qYesBefore = market.qYes();
+        UD60x18 qNoBefore = market.qNo();
+        UD60x18 priceBefore = market.priceYes();
+
+        market.trade(true, ud(0));
+
+        assertEq(market.qYes().unwrap(), qYesBefore.unwrap());
+        assertEq(market.qNo().unwrap(), qNoBefore.unwrap());
+        assertEq(market.priceYes().unwrap(), priceBefore.unwrap());
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Category B: State and access control
+    // ─────────────────────────────────────────────────────────────
+
+    function test_tradeRevertsAfterResolution() public {
+        market.resolve(true);
+
+        vm.expectRevert("market resolved");
+        market.trade(true, ud(10e18));
+    }
+
+    function test_onlyResolverCanResolve() public {
+        address attacker = address(0xBEEF);
+
+        vm.prank(attacker);
+        vm.expectRevert("only resolver");
+        market.resolve(true);
+    }
+
+    function test_cannotResolveTwice() public {
+        market.resolve(true);
+
+        vm.expectRevert("already resolved");
+        market.resolve(false);
+    }
+
+    function test_resolutionEmitsEvent() public {
+        vm.expectEmit(false, false, false, true);
+        emit Resolved(true);
+        market.resolve(true);
     }
 }

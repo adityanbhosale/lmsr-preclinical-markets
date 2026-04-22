@@ -23,11 +23,16 @@ contract LSLMSR {
     event Resolved(bool outcome);
 
     constructor(UD60x18 _alpha, UD60x18 _qAbmmYes, UD60x18 _qAbmmNo, address _resolver) {
-        alpha = _alpha;
-        qYes = _qAbmmYes;
-        qNo = _qAbmmNo;
-        resolver = _resolver;
-    }
+    require(_alpha.unwrap() > 0, "alpha must be positive");
+    require(_qAbmmYes.unwrap() > 0, "qAbmmYes must be positive");
+    require(_qAbmmNo.unwrap() > 0, "qAbmmNo must be positive");
+    require(_resolver != address(0), "resolver cannot be zero address");
+    
+    alpha = _alpha;
+    qYes = _qAbmmYes;
+    qNo = _qAbmmNo;
+    resolver = _resolver;
+}
 
     /// @notice Computes the liquidity parameter b(q) = alpha * (q_yes + q_no)
     function b() public view returns (UD60x18) {
