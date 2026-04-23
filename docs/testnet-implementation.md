@@ -27,7 +27,7 @@ Constructor parameters:
 - `q_abmm_no = 100` (initial NO seed shares — symmetric, initial price = 0.5)
 - `resolver = deployer` (admin-attested resolution stub for MVP)
 
-Basescan: [https://sepolia.basescan.org/address/0x747DF6BebC9A8fb208886270E5D333F79c48F812](https://sepolia.basescan.org/address/0x747DF6BebC9A8fb208886270E5D333F79c48F812)
+Basescan: [https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B](https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B)
 
 ## Contract Architecture
 
@@ -124,7 +124,7 @@ forge verify-contract \
   --constructor-args $(cast abi-encode "constructor(uint256,uint256,uint256,address)" \
     50000000000000000 100000000000000000000 100000000000000000000 \
     0xeAe842a316c5e96EC02824C4B5A7D030faEFd07C) \
-  0x747DF6BebC9A8fb208886270E5D333F79c48F812 \
+  0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B \
   src/LSLMSR.sol:LSLMSR
 ```
 
