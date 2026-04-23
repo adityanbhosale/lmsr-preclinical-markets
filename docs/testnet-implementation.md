@@ -8,8 +8,6 @@ The testnet deployment is a development artifact, not a production system — th
 
 ## Deployment Coordinates
 
-### Current: V2 — with per-trader position tracking
-
 | Field | Value |
 |-------|-------|
 | Network | Base Sepolia (chain ID 84532) |
@@ -23,15 +21,7 @@ The testnet deployment is a development artifact, not a production system — th
 
 Basescan: [https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B](https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B) ✓ Source verified
 
-### Previous: V1 — cost function only, no position tracking (superseded)
-
-| Field | Value |
-|-------|-------|
-| Contract address | `0x747DF6BebC9A8fb208886270E5D333F79c48F812` |
-| Block | 40,653,253 |
-| Deploy date | April 22, 2026 |
-
-Constructor parameters (both versions):
+Constructor parameters:
 - `α = 0.05` (LS-LMSR liquidity scaling parameter)
 - `q_abmm_yes = 100` (initial YES seed shares)
 - `q_abmm_no = 100` (initial NO seed shares — symmetric, initial price = 0.5)
