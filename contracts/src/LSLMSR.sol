@@ -21,7 +21,21 @@ contract LSLMSR {
     // Events
     event Trade(address indexed trader, bool isYes, UD60x18 shares, UD60x18 cost);
     event Resolved(bool outcome);
+// Position tracking
+    struct Position {
+        UD60x18 yesShares;
+        UD60x18 noShares;
+    }
 
+    mapping(address => Position) public positions;
+
+    event PositionUpdated(
+        address indexed trader,
+        bool isYes,
+        UD60x18 sharesBought,
+        UD60x18 newYesShares,
+        UD60x18 newNoShares
+    );
     constructor(UD60x18 _alpha, UD60x18 _qAbmmYes, UD60x18 _qAbmmNo, address _resolver) {
     require(_alpha.unwrap() > 0, "alpha must be positive");
     require(_qAbmmYes.unwrap() > 0, "qAbmmYes must be positive");
@@ -81,17 +95,40 @@ contract LSLMSR {
 
     /// @notice Executes a trade. User pays cost in quote token (not implemented here yet)
     /// @dev This version just updates state. Payment integration comes later.
-    function trade(bool isYes, UD60x18 shares) external returns (UD60x18 tradeCost) {
+    /// @notice Execute a trade against the LS-LMSR market.
+    /// @dev Updates the global q vector AND the caller's position.
+    ///      Reverts if the market is resolved or if shares is zero.
+    /// @param isYes True to buy YES shares, false to buy NO.
+    /// @param shares Amount of shares to purchase (UD60x18).
+    function trade(bool isYes, UD60x18 shares) external {
         require(!resolved, "market resolved");
-        tradeCost = costOfTrade(isYes, shares);
+        require(shares.unwrap() > 0, "shares must be positive");
 
+        UD60x18 tradeCost = costOfTrade(isYes, shares);
+
+        // Update global quantities
         if (isYes) {
             qYes = qYes.add(shares);
         } else {
             qNo = qNo.add(shares);
         }
 
+        // Update caller's position
+        Position storage pos = positions[msg.sender];
+        if (isYes) {
+            pos.yesShares = pos.yesShares.add(shares);
+        } else {
+            pos.noShares = pos.noShares.add(shares);
+        }
+
         emit Trade(msg.sender, isYes, shares, tradeCost);
+        emit PositionUpdated(
+            msg.sender,
+            isYes,
+            shares,
+            pos.yesShares,
+            pos.noShares
+        );
     }
 
     /// @notice Resolves the market

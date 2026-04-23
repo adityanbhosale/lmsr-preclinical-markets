@@ -8,17 +8,30 @@ The testnet deployment is a development artifact, not a production system — th
 
 ## Deployment Coordinates
 
+### Current: V2 — with per-trader position tracking
+
 | Field | Value |
 |-------|-------|
 | Network | Base Sepolia (chain ID 84532) |
-| Contract address | `0x747DF6BebC9A8fb208886270E5D333F79c48F812` |
-| Deployment tx | `0x66be2ae6fb6c30f75bc69dd0e93f416fe87632f329473112123c9bc31a9a3c0e` |
-| Block | 40,653,253 |
+| Contract address | `0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B` |
+| Deployment tx | `0xcff4772939afd7bf205a12199c5212a5f62e7d6ca2dd3c6f8d1b559a64815bf7` |
+| Block | 40,573,231 |
 | Deployer | `0xeAe842a316c5e96EC02824C4B5A7D030faEFd07C` |
 | Deploy date | April 22, 2026 |
-| Deploy gas cost | 0.00000648618 ETH (1,081,030 gas @ 0.006 gwei) |
+| Deploy gas cost | 0.00000693188 ETH (1,155,180 gas @ 0.006 gwei) |
+| Tests | 21 passing |
 
-Constructor parameters:
+Basescan: [https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B](https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B) ✓ Source verified
+
+### Previous: V1 — cost function only, no position tracking (superseded)
+
+| Field | Value |
+|-------|-------|
+| Contract address | `0x747DF6BebC9A8fb208886270E5D333F79c48F812` |
+| Block | 40,653,253 |
+| Deploy date | April 22, 2026 |
+
+Constructor parameters (both versions):
 - `α = 0.05` (LS-LMSR liquidity scaling parameter)
 - `q_abmm_yes = 100` (initial YES seed shares)
 - `q_abmm_no = 100` (initial NO seed shares — symmetric, initial price = 0.5)
@@ -40,23 +53,25 @@ Public interface:
 | `costOfTrade(bool, UD60x18)` | `UD60x18` | Cost of a prospective trade |
 | `trade(bool, UD60x18)` | — | Executes a trade, updates the `q` vector |
 | `resolve(bool)` | — | Resolver-only; sets outcome and flips `resolved` to true |
+| `positions(address)` | `(UD60x18, UD60x18)` | Returns a trader's (yesShares, noShares) position |
 
 Deliberate omissions — staged for later, not forgotten:
 
-- Per-trader position accounting (next workflow item)
 - USDC payment flow on `trade()` (current trades update the `q` vector but don't transfer value)
 - `claim()` for resolved markets
 - Access control on `trade()` (the identity-registry gate that makes this a credentialed market)
 
 ## Test Coverage
 
-`contracts/test/LSLMSR.t.sol` contains 14 passing unit tests, organized into three groups:
+`contracts/test/LSLMSR.t.sol` contains 21 passing unit tests, organized into three groups:
 
 **Core math (5 tests):** initial price equals 0.5 under symmetric seeding; buying YES increases the price; cost function is monotonic under trading; `costOfTrade()` output matches the actual cost delta from the trade; asymmetric seeding (`q_yes = 150`, `q_no = 50`) produces the correct marginal price.
 
 **Category A — Input-domain boundaries (6 tests):** constructor reverts on zero alpha, zero YES seed, zero NO seed, zero resolver address; `trade()` reverts on zero share amount; extreme asymmetric seeding does not overflow PRBMath's exponential.
 
 **Category B — State and access control (3 tests):** `resolve()` reverts when called by a non-resolver; `resolve()` reverts when called twice; `trade()` reverts after resolution.
+
+**Category C — Per-trader position tracking (7 tests):** single trader buying YES only updates yesShares; single trader buying NO only updates noShares; same trader accumulates across multiple trades; same trader mixing YES and NO sides accumulates each independently; two traders on opposite sides maintain separate positions; three traders maintain separate positions with correct aggregate invariant; `PositionUpdated` event fires with correct arguments.
 
 Run locally:
 
