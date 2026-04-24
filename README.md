@@ -5,6 +5,7 @@ A two-layer system for creating liquid secondary markets in contractual biotech 
 **Live implementation:** [molecula-flame.vercel.app](https://molecula-flame.vercel.app)
 **Expert platform:** [platform-v2-umber.vercel.app/markets](https://platform-v2-umber.vercel.app/markets)
 **Legal architecture:** [Tokenized RWA Legal Whitepaper](docs/legal_whitepaper.pdf)
+**Testnet reference implementation:** fully deployed on Base Sepolia + Ethereum Sepolia, CCTP outbound leg demonstrated end-to-end. See [Testnet Reference Implementation](#testnet-reference-implementation) below.
 
 ---
 
@@ -29,6 +30,37 @@ The result is a structural mispricing of the asset class. Biotechs either accept
 
 This model resolves the illiquidity problem by separating the **legal ownership layer** from the **price discovery layer** and allowing each to operate under the regulatory regime best suited to it. The full legal architecture is documented in the [whitepaper](docs/legal_whitepaper.pdf); this section summarizes the design.
 
+```mermaid
+flowchart TB
+    subgraph L2["LAYER 2 — Prediction Market (Base)"]
+        direction LR
+        LSLMSR["LS-LMSR AMM<br/>outcome shares (YES / NO)<br/>USDC settlement<br/>permissionless trading"]
+    end
+
+    subgraph L1["LAYER 1 — Tokenized SPV (Ethereum Mainnet)"]
+        direction LR
+        SPV["Delaware LLC<br/>holding milestone payment right<br/>ERC-3643 (T-REX) token<br/>Reg D 506(c) accredited investors"]
+    end
+
+    subgraph CCTP["Cross-Chain Settlement"]
+        CCTP_box["Circle CCTP<br/>native burn + mint<br/>no wrapped USDC"]
+    end
+
+    L2 -.references event.-> L1
+    L1 <-->|"USDC flows via CCTP"| CCTP
+    CCTP <-->|"USDC flows via CCTP"| L2
+
+    classDef l2 fill:#e8f4ff,stroke:#0066cc,stroke-width:2px,color:#000
+    classDef l1 fill:#fff5e6,stroke:#cc7700,stroke-width:2px,color:#000
+    classDef cctp fill:#f0f0f0,stroke:#666,stroke-width:1px,color:#000
+    class L2,LSLMSR l2
+    class L1,SPV l1
+    class CCTP,CCTP_box cctp
+```
+
+<details>
+<summary>ASCII diagram (fallback)</summary>
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                   LAYER 2: PREDICTION MARKET                    │
@@ -48,15 +80,52 @@ This model resolves the illiquidity problem by separating the **legal ownership 
 │   Regulation D 506(c) — accredited investors only               │
 │   Token as authoritative legal record of ownership              │
 └─────────────────────────────────────────────────────────────────┘
+
+         ╔═══════════════════════════════════════╗
+         ║  CIRCLE CCTP — cross-chain settlement  ║
+         ║  USDC native burn + mint between       ║
+         ║  Ethereum (L1) and Base (L2)           ║
+         ╚═══════════════════════════════════════╝
 ```
+</details>
 
 **Layer 1** is the security. Token holders own membership interests in the SPV, which in turn holds the contractual milestone payment right. The token is the legal record of ownership, not a digital representation of an off-chain claim — the SPV operating agreement designates the on-chain ERC-3643 register as the definitive cap table.
 
 **Layer 2** is the price discovery mechanism. Outcome shares are binary instruments that pay out based on the public milestone event, not on the SPV's economic performance. They are structured as CFTC-style event contracts rather than securities, enabling continuous trading without triggering Reg D transfer restrictions on the underlying SPV token.
 
+**Cross-chain settlement** uses Circle's CCTP rather than a custodial bridge, so USDC on both chains is native Circle-issued rather than a wrapped derivative. The settlement path does not introduce bridge risk as a trust assumption.
+
 The architecture is fully on-chain (**Path B**): compliance is enforced at the token contract level via ERC-3643, not through off-chain middleware. This commits the system to an institutional-grade infrastructure stack (Ethereum mainnet + Base + USDC + Circle CCTP) and leverages the same ERC-3643 standard used by Securitize for BlackRock's BUIDL fund and KKR's tokenized private equity offerings.
 
 The only architectural sub-decision left open is **soulbound vs. composable outcome shares** — whether Layer 2 tokens should be freely transferable (maximizing DeFi composability but risking characterization as an unlawful secondary market in the restricted SPV interest) or soulbound (non-transferable, resolving the Reg D resale question cleanly but eliminating composability). The resolution depends on the SEC vs. CFTC jurisdictional determination discussed in the whitepaper's Section 5.
+
+---
+
+## What's Unique vs. Existing RWA Models
+
+The dominant RWA tokenization platforms today — BlackRock's BUIDL, Ondo Finance, Superstate, Theo.xyz, Backed Finance — collapse legal ownership and trading onto a single layer. They issue a permissioned ERC-3643-style token that *is* the asset, and secondary trading (if it happens at all) occurs on permissioned DEXs or through bilateral OTC. The design works for yield-bearing assets (Treasuries, credit, gold) where continuous cash flows create natural liquidity, but it produces a structural liquidity ceiling for **event-triggered assets** like milestone payment rights.
+
+This project's architecture is designed specifically for the event-triggered case. The table below makes the contrasts explicit:
+
+| Platform | Asset class | Layer structure | Secondary liquidity | Cross-chain |
+| --- | --- | --- | --- | --- |
+| **BlackRock BUIDL** | Tokenized Treasuries (yield-bearing) | Single layer, Ethereum-only | Permissioned OTC, thin | N/A |
+| **Ondo Finance** | Tokenized Treasuries (yield-bearing) | Single layer, multi-chain | Permissioned, weak composability | Multi-chain deploy, no native bridge |
+| **Theo.xyz** | Tokenized Treasuries + gold + leveraged strategies | Single layer, Ethereum mainnet only | Permissioned composability within Theo stack | Sidestepped via single-chain concentration |
+| **Securitize** | Multi-asset tokenization platform | Single layer (ERC-3643) | Permissioned, fund-specific | Per-asset deploys |
+| **Polymarket** | Event contracts (permissionless) | Single layer (L2 only) | Liquid for top events, thin elsewhere | N/A (single chain) |
+| **This project** | Milestone payment rights (event-triggered) | **Two layers — permissioned L1 + permissionless L2** | **Layer 2 provides continuous price discovery with natural counterparty structure from hedgers + speculators + LPs** | **Circle CCTP native, no wrapped derivatives** |
+
+The core differentiation is that **compliance is placed only where it structurally has to be** (Layer 1, where legal ownership of the restricted security lives), and **permissionless composability is preserved on Layer 2** (where the traded instrument is an event contract, not a security). No existing platform operates across this separation.
+
+Specifically:
+
+- **BlackRock, Ondo, Superstate** have chosen yield-bearing assets where the single-layer design works well. Their TVL proves their model for that asset class; it doesn't address event-triggered assets.
+- **Theo.xyz** is the most sophisticated single-layer design — "past-tokenization" liquidity via lending, leverage, and composability on Ethereum mainnet. The cost is that their entire composability stack is permissioned, not DeFi-composable with Aave or Uniswap.
+- **Securitize and Tokeny** provide the ERC-3643 infrastructure layer that Layer 1 uses. They don't opine on what sits above the compliance layer; they provide the substrate.
+- **Polymarket and Kalshi** have the Layer 2 half (event contracts with continuous price discovery) but no Layer 1 institutional asset to pair it with. They price external events, not events bearing on a tokenized security.
+
+The dual-layer architecture is what bridges these halves. It is the specific design pattern not served by any existing RWA or prediction market platform.
 
 ---
 
@@ -147,9 +216,78 @@ q_abmm_no(t)  = w(t) · q_abmm_no(0)
 
 This makes retreat responsive to signal quality, not just signal quantity.
 
+The mechanism has been validated empirically against four completed drug development programs (sotorasib, vepdegestrant, adagrasib, BI 1701963), producing a mean Brier score improvement of +0.2208 over flat-prior baseline. See `docs/mechanism.md` for the full backtest methodology.
+
 ### 5. Settlement and Cross-Chain Flow
 
 Layer 2 lives on **Base** for low transaction costs and USDC-native infrastructure. When a prediction market resolves, USDC distributions to outcome share holders execute natively on Base. When the underlying SPV milestone payment is settled, the legal finality is recorded on Ethereum mainnet via the ERC-3643 token contract; USDC moves cross-chain via **Circle's Cross-Chain Transfer Protocol (CCTP)**.
+
+---
+
+## Testnet Reference Implementation
+
+A working Solidity implementation of the full dual-layer architecture is deployed across Ethereum Sepolia (Layer 1) and Base Sepolia (Layer 2), with Circle CCTP connecting the two. All contracts are verified on their respective block explorers and reproducible from the `contracts/` subdirectory via Foundry.
+
+### Key deployment coordinates
+
+| Component | Network | Address | Verified |
+| --- | --- | --- | --- |
+| Layer 2 LSLMSR V3 (USDC-settling AMM with claim) | Base Sepolia | [`0xb7Bd56113438961202EcFF985E7Cb2B9F2442475`](https://sepolia.basescan.org/address/0xb7Bd56113438961202EcFF985E7Cb2B9F2442475) | ✓ |
+| Layer 1 MilestoneRegistry (ERC-3643 four-token ladder) | Ethereum Sepolia | [`0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D`](https://sepolia.etherscan.io/address/0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D) | ✓ |
+| CCTP outbound demo (Sepolia → Base Sepolia burn tx) | Ethereum Sepolia | [`0xb5d51882a2a26fe24d38785709022d762475d84d4e0e2ff84dea1d144baa6452`](https://sepolia.etherscan.io/tx/0xb5d51882a2a26fe24d38785709022d762475d84d4e0e2ff84dea1d144baa6452) | — |
+
+Full deployment coordinates, architecture notes, and roadblock documentation are in [`docs/testnet-implementation.md`](docs/testnet-implementation.md). CCTP demo walkthrough with all transaction hashes is in [`docs/cctp-demo.md`](docs/cctp-demo.md).
+
+### Component summary
+
+**Layer 2 — LSLMSR V3** (`contracts/src/LSLMSR.sol`)
+
+- LS-LMSR cost function with PRBMath UD60x18 fixed-point for `exp` / `ln` operations
+- Per-trader position tracking (`mapping(address => Position)`)
+- USDC settlement via ERC-20 `transferFrom` pull model
+- Solvency guarantee: `resolve()` reverts unless contract holds ≥ 1 USDC per winning share
+- Proportional payout via pull-model `claim()` — winners receive `(their shares / total winning shares) × pool balance`
+- `depositLiquidity()` for pre-resolution liability top-ups
+
+Three iterated versions (V1 → V2 → V3) progressed from pure cost function (V1, 14 tests) to position tracking (V2, 21 tests) to full USDC settlement + claim (V3, 32 tests).
+
+**Layer 1 — Minimal T-REX suite** (`contracts/src/layer1/`)
+
+Five coordinated contracts implementing a simplified ERC-3643 permissioned security token standard:
+
+- `ClaimTopicsRegistry.sol` — registers required claim topics (MVP: `ACCREDITED_INVESTOR`)
+- `IdentityRegistry.sol` — investor registration + issue/revoke claim lifecycle
+- `Compliance.sol` — "both parties verified" transfer-gating module
+- `MilestoneToken.sol` — ERC-3643 token with mint/burn/transfer compliance hooks
+- `MilestoneRegistry.sol` — four-token ladder (IND/Phase 1/Phase 2/Approval) under shared identity + compliance infrastructure
+
+Simplifications from full T-REX documented in `docs/testnet-implementation.md`: no separate OnchainID contracts, no TrustedIssuersRegistry (single trusted issuer), simplified compliance rules, no regulatory modifier suite. Interface-compatible with full T-REX; the reference implementation can be swapped in without changing Layer 2.
+
+27 unit tests cover claim topics registration, identity lifecycle, compliance rules (verified-to-verified, revocation, mint/burn edge cases), token transfer gating, and the four-milestone ladder behavior.
+
+**CCTP cross-chain demo** (`contracts/script/cctp/`, `contracts/scripts/cctp_poll.js`)
+
+Four Foundry scripts plus a Node.js attestation poller (ethers v6) implementing a full round-trip: burn USDC on Sepolia → Circle attestation → mint on Base Sepolia → trade on Layer 2 → resolve → claim → CCTP return → final mint on Sepolia.
+
+**Outbound leg is complete on testnet** and fully documented with transaction hashes in [`docs/cctp-demo.md`](docs/cctp-demo.md). The return leg (resolve + claim + CCTP back to Sepolia) is scripted, committed, and deferred pending additional testnet USDC liquidity; resumption steps are in the same doc.
+
+### Test coverage
+
+| Suite | Tests | Covers |
+| --- | --- | --- |
+| `contracts/test/LSLMSR.t.sol` | 32 | LSLMSR V3: cost function math, position tracking, USDC settlement, solvency check, proportional claim, single/multi-winner scenarios |
+| `contracts/test/Layer1.t.sol` | 27 | ClaimTopicsRegistry, IdentityRegistry lifecycle, Compliance rules, MilestoneToken transfer gating, four-token ladder behavior |
+| **Total** | **59** | Full Layer 1 + Layer 2 component coverage |
+
+Run from `contracts/`:
+
+```bash
+forge test -vv
+```
+
+### End-to-end reproducibility
+
+The `contracts/` directory is a self-contained Foundry project. Given a funded deployer wallet (Sepolia ETH + Base Sepolia ETH + Sepolia USDC), the full stack can be redeployed to testnet in ~20 minutes. Deployment commands and expected output are documented in `docs/testnet-implementation.md` and `docs/cctp-demo.md`.
 
 ---
 
@@ -195,73 +333,37 @@ Summarized from the whitepaper's Section 7:
 
 **(e) SPV assignment without counterparty consent.** Whether the pharma counterparty's assignment of a milestone payment right to the SPV requires regulatory consent (FDA, IRB) given that the underlying right is tied to a regulated clinical process.
 
-**Open question 5:** Given the model's docus on developing a tokenized RWA with a overlayed Prediction Market Layer where the underlying is tokenized as a security, what are the key next developemental steps:
+**Open question 5:** Given the model's focus on developing a tokenized RWA with an overlayed Prediction Market Layer where the underlying is tokenized as a security, what are the key next developmental steps:
 
-**Phase 1:  **
+**Phase 1:**
 
-1. Legal Foundation – i.e. what's being tokenized?
-          * Royalty Stream: % of future revenues (essentially a revenue participation agreement)
-          * Milestone Payment Rights: contractual right to receive payment upon a specific clinical event             (binary, time-bounded, directly maps to prediction market structure)
-          * Developement-stage equity – ownership stake in drug candidate or biotech entity. Most
-            complex, closest to traditional VC
-          * IP license right – tokenized share of licensing revenue from a patent or compound
+1. Legal Foundation – i.e. what's being tokenized?
+   * Royalty Stream: % of future revenues (essentially a revenue participation agreement)
+   * Milestone Payment Rights: contractual right to receive payment upon a specific clinical event (binary, time-bounded, directly maps to prediction market structure)
+   * Development-stage equity – ownership stake in drug candidate or biotech entity. Most complex, closest to traditional VC
+   * IP license right – tokenized share of licensing revenue from a patent or compound
 
-      Legal Questions:
-        1. DO the outcome shares (YES/NO tokens) constitute securities under the Securities Act or
-        derivatives under the CEA – and what's the enforcement risk of getting this wrong?
-        2. Which exemption is most viable for the underlying asset token – Reg D 506(c) accredited  
-        investors, general solicitation allowed) vs. Reg S (non-US persons, sidesteps SEC) vs. Reg A+
-        (broader base, slower)
-        3. Can the prediction market layer and the RWA layer be legally separated such that information
-        market participants are not deemed to hold the underlying security?
+   Legal Questions:
+   1. Do the outcome shares (YES/NO tokens) constitute securities under the Securities Act or derivatives under the CEA – and what's the enforcement risk of getting this wrong?
+   2. Which exemption is most viable for the underlying asset token – Reg D 506(c) (accredited investors, general solicitation allowed) vs. Reg S (non-US persons, sidesteps SEC) vs. Reg A+ (broader base, slower)?
+   3. Can the prediction market layer and the RWA layer be legally separated such that information market participants are not deemed to hold the underlying security?
 
-2. Legal Wrapper – SPV – Delaware LLC or LP created specifically to hold the underlying asset. Token holders have membership interests in the SPV. This is how Robinhood structured its OpenAI/SpaceX tokenized equity exposure and how most institutional tokenization platforms operate (Securitize, Centrifuge).
+2. Legal Wrapper – SPV – Delaware LLC or LP created specifically to hold the underlying asset. Token holders have membership interests in the SPV. This is how Robinhood structured its OpenAI/SpaceX tokenized equity exposure and how most institutional tokenization platforms operate (Securitize, Centrifuge).
 
-**Phase 2:  **
+**Phase 2:**
 
 3. ERC-3643 implementation (T-REX) for the underlying asset token (production standard for permissioned security tokens).
-   * Identity Registry – maps wallet addresses to verified identity claims (accreditation status,
-     jurisdiction, sanctions screening). Integrates with an off-chain KYC provider (Persona, Jumio,
-     or Synaps, which is crypto-native).
-   * Compliance Module – smart contract which enforces transfer rules. Checks identiy registry on
-     every transfer. Enforces lock-up periods, jurisdiction restrictions, maximum holder counts (Reg D
-     has a 2,000 investor limit).
-   * Token Contract – ERC-3643 asset token itself, with transfer hooks that call the compliance
-     module.
-   * Claims Issuer – the trusted entity that signs identity claims (i.e. SPV admin or a third-party
-     KYC provider).
+   * Identity Registry – maps wallet addresses to verified identity claims (accreditation status, jurisdiction, sanctions screening). Integrates with an off-chain KYC provider (Persona, Jumio, or Synaps, which is crypto-native).
+   * Compliance Module – smart contract which enforces transfer rules. Checks identity registry on every transfer. Enforces lock-up periods, jurisdiction restrictions, maximum holder counts (Reg D has a 2,000 investor limit).
+   * Token Contract – ERC-3643 asset token itself, with transfer hooks that call the compliance module.
+   * Claims Issuer – the trusted entity that signs identity claims (i.e. SPV admin or a third-party KYC provider).
 
-Our LS-LMSR AMM woould essentially sit on top of this layer, interacting with the ERC-3643 token but maintaining its own contract architecture.
+Our LS-LMSR AMM would essentially sit on top of this layer, interacting with the ERC-3643 token but maintaining its own contract architecture.
 
-4. Separate the information market layer cleanly – ensure that YES/NO outcome shares are not the underlying ERC-3643 security token – they're a derivative instrument that references it.
+4. Separate the information market layer cleanly – ensure that YES/NO outcome shares are not the underlying ERC-3643 security token – they're a derivative instrument that references it.
    * keeps outcome shares outside securities law
-   * allows non-KYC'd participants to trade the information market while only KYC'd participants hold the      underlying asset
-   * preserves composability – outcome shares can potentially move freely while the underlying asset           remains permissioned
-  
-
----
-## Testnet Reference Implementation
-
-A working Solidity implementation of the Layer 2 LS-LMSR automated market
-maker is deployed and live on Base Sepolia at
-[`0xb7Bd56113438961202EcFF985E7Cb2B9F2442475`](https://sepolia.basescan.org/address/0xb7Bd56113438961202EcFF985E7Cb2B9F2442475).
-The contract implements the LS-LMSR cost function, marginal pricing, and
-trading mechanics described in the whitepaper, using PRBMath's UD60x18
-fixed-point type for `exp`/`ln` operations. 14 unit tests pass, covering
-core math, input-domain boundaries, and state/access control
-(`contracts/test/LSLMSR.t.sol`).
-
-See [`docs/testnet-implementation.md`](docs/testnet-implementation.md) for
-deployment coordinates, architecture notes, test coverage detail, and a
-walkthrough of implementation decisions and roadblocks.
-
----
-### CCTP cross-chain demo
-
-Outbound leg (Sepolia burn → Base Sepolia mint + trade) complete. Return
-leg (resolve → claim → CCTP back to Sepolia) scripted and deferred pending
-testnet USDC liquidity. See [docs/cctp-demo.md](docs/cctp-demo.md) for
-transaction hashes and resumption steps.
+   * allows non-KYC'd participants to trade the information market while only KYC'd participants hold the underlying asset
+   * preserves composability – outcome shares can potentially move freely while the underlying asset remains permissioned
 
 ---
 
@@ -281,20 +383,48 @@ A working two-layer market for tokenized milestone payment rights enables three 
 
 ```
 lmsr-preclinical-markets/
-├── core/
-│   ├── lmsr_market.py              # LS-LMSR implementation
-│   ├── lmsr_prior.py               # ABMM seeding + calibration-weighted retreat
-│   └── retreat_functions.py        # Linear vs exponential retreat comparison
+├── contracts/                           # Foundry project — Solidity reference implementation
+│   ├── foundry.toml                     # RPC endpoints + Etherscan config for Base Sepolia + Sepolia
+│   ├── src/
+│   │   ├── LSLMSR.sol                   # Layer 2: LS-LMSR V3 with USDC settlement + proportional claim
+│   │   └── layer1/                      # Layer 1: minimal ERC-3643 suite
+│   │       ├── ClaimTopicsRegistry.sol
+│   │       ├── IdentityRegistry.sol
+│   │       ├── Compliance.sol
+│   │       ├── MilestoneToken.sol
+│   │       └── MilestoneRegistry.sol
+│   ├── test/
+│   │   ├── LSLMSR.t.sol                 # 32 tests — Layer 2
+│   │   ├── Layer1.t.sol                 # 27 tests — Layer 1
+│   │   └── mocks/MockUSDC.sol           # 6-decimal ERC-20 stand-in for tests
+│   ├── script/
+│   │   ├── DeployLSLMSR.s.sol           # Deploy Layer 2 to Base Sepolia
+│   │   ├── DeployLayer1.s.sol           # Deploy Layer 1 suite to Ethereum Sepolia
+│   │   └── cctp/                        # CCTP cross-chain demo scripts
+│   │       ├── CctpBurnOutbound.s.sol
+│   │       ├── CctpMintAndTrade.s.sol
+│   │       ├── CctpResolveClaimReturn.s.sol
+│   │       └── CctpFinalMint.s.sol
+│   ├── scripts/
+│   │   └── cctp_poll.js                 # Node.js Circle attestation poller (ethers v6)
+│   └── lib/                             # forge-std, prb-math, openzeppelin-contracts
+│
+├── core/                                # Python research implementation
+│   ├── lmsr_market.py                   # LS-LMSR implementation (reference)
+│   ├── lmsr_prior.py                    # ABMM seeding + calibration-weighted retreat
+│   └── retreat_functions.py             # Linear vs exponential retreat comparison
 ├── notebooks/
-│   └── mechanism_demo.ipynb        # Interactive walkthrough with visualizations
+│   └── mechanism_demo.ipynb             # Interactive walkthrough with visualizations
 ├── api/
-│   └── main.py                     # FastAPI backend (credentials scrubbed)
+│   └── main.py                          # FastAPI backend (credentials scrubbed)
 ├── docs/
-│   ├── mechanism.md                # Extended formal write-up of Layer 2
-│   ├── legal_whitepaper.pdf        # Full two-layer legal and architectural framework
-│   └── settlement_architecture.md  # ERC-3643 + CCTP + oracle resolution design
+│   ├── mechanism.md                     # Extended formal write-up of Layer 2 + backtest
+│   ├── legal_whitepaper.pdf             # Full two-layer legal and architectural framework
+│   ├── settlement_architecture.md       # ERC-3643 + CCTP + oracle resolution design
+│   ├── testnet-implementation.md        # Deployment coordinates, roadblocks, design decisions
+│   └── cctp-demo.md                     # CCTP cross-chain demo — tx hashes + resumption steps
 ├── .env.example
-├── requirements.txt
+├── requirements.txt                     # Python research dependencies
 └── LICENSE
 ```
 
@@ -302,8 +432,34 @@ lmsr-preclinical-markets/
 
 ## Installation
 
+### For the Solidity reference implementation (Foundry)
+
+Prerequisites: [Foundry](https://book.getfoundry.sh/getting-started/installation), [Node.js](https://nodejs.org) v18+ for the CCTP poller.
+
+```bash
+git clone https://github.com/adityanbhosale/lmsr-preclinical-markets
+cd lmsr-preclinical-markets/contracts
+
+# Install Solidity dependencies
+forge install
+
+# Install the CCTP attestation poller's one dep
+npm install
+
+# Build and test
+forge build
+forge test -vv
 ```
-git clone https://github.com/adityanb/lmsr-preclinical-markets
+
+Expected: 59 tests passing (32 Layer 2 + 27 Layer 1), clean build with lint notes.
+
+To redeploy to testnet, copy `.env.example` to `.env`, populate `PRIVATE_KEY` and `ETHERSCAN_API_KEY`, then follow the deployment commands in `docs/testnet-implementation.md` and `docs/cctp-demo.md`.
+
+### For the Python research implementation
+
+Prerequisites: Python 3.10+.
+
+```bash
 cd lmsr-preclinical-markets
 pip install -r requirements.txt
 cp .env.example .env  # fill in your credentials
@@ -311,13 +467,13 @@ cp .env.example .env  # fill in your credentials
 
 To run the mechanism demo:
 
-```
+```bash
 jupyter notebook notebooks/mechanism_demo.ipynb
 ```
 
 To start the API:
 
-```
+```bash
 uvicorn api.main:app --reload
 ```
 
@@ -344,4 +500,4 @@ uvicorn api.main:app --reload
 University of Pennsylvania (Biology & Healthcare Finance)
 [adityanb@sas.upenn.edu](mailto:adityanb@sas.upenn.edu)
 
-*Working project — two-layer architecture committed, Layer 2 mechanism implementation live, Layer 1 SPV tokenization in legal review. Feedback welcome.*
+*Working project — two-layer architecture committed, Layer 2 mechanism and Layer 1 ERC-3643 suite deployed and verified on testnet, CCTP outbound leg demonstrated end-to-end, Layer 1 SPV legal structure in review. Feedback welcome.*
