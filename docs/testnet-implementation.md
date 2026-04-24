@@ -11,23 +11,30 @@ The testnet deployment is a development artifact, not a production system — th
 | Field | Value |
 |-------|-------|
 | Network | Base Sepolia (chain ID 84532) |
-| Contract address | `0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B` |
-| Deployment tx | `0xcff4772939afd7bf205a12199c5212a5f62e7d6ca2dd3c6f8d1b559a64815bf7` |
-| Block | 40,573,231 |
+| Contract address | `0xb7Bd56113438961202EcFF985E7Cb2B9F2442475` |
+| Deployment tx | `0x4c81f828980fd37f9e5152651b7f172aec2cd4b93e67e50a21bbb02f434dd699` |
+| Block | 40,610,534 |
 | Deployer | `0xeAe842a316c5e96EC02824C4B5A7D030faEFd07C` |
-| Deploy date | April 22, 2026 |
-| Deploy gas cost | 0.00000693188 ETH (1,155,180 gas @ 0.006 gwei) |
-| Tests | 21 passing |
+| Deploy date | April 23, 2026 |
+| Deploy gas cost | 0.000009319194 ETH (1,553,199 gas @ 0.006 gwei) |
+| USDC settlement token | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` (Circle Base Sepolia) |
+| Tests | 32 passing |
 
-Basescan: [https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B](https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B) ✓ Source verified
+Basescan: [https://sepolia.basescan.org/address/0xb7Bd56113438961202EcFF985E7Cb2B9F2442475](https://sepolia.basescan.org/address/0xb7Bd56113438961202EcFF985E7Cb2B9F2442475) ✓ Source verified
 
 Constructor parameters:
 - `α = 0.05` (LS-LMSR liquidity scaling parameter)
 - `q_abmm_yes = 100` (initial YES seed shares)
 - `q_abmm_no = 100` (initial NO seed shares — symmetric, initial price = 0.5)
 - `resolver = deployer` (admin-attested resolution stub for MVP)
+- `usdc = Circle's Base Sepolia testnet USDC`
 
-Basescan: [https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B](https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B)
+The contract supports:
+- Trades settled in USDC (6-decimal) via `transferFrom`
+- Per-trader position tracking with `Position { yesShares, noShares }`
+- Resolution gated on solvency: contract must hold ≥ 1 USDC per winning share
+- Proportional payout via `claim()` — winners receive (their shares / total winning shares) × contract balance
+- `depositLiquidity()` for pre-resolution liability top-ups
 
 ## Contract Architecture
 
@@ -62,6 +69,10 @@ Deliberate omissions — staged for later, not forgotten:
 **Category B — State and access control (3 tests):** `resolve()` reverts when called by a non-resolver; `resolve()` reverts when called twice; `trade()` reverts after resolution.
 
 **Category C — Per-trader position tracking (7 tests):** single trader buying YES only updates yesShares; single trader buying NO only updates noShares; same trader accumulates across multiple trades; same trader mixing YES and NO sides accumulates each independently; two traders on opposite sides maintain separate positions; three traders maintain separate positions with correct aggregate invariant; `PositionUpdated` event fires with correct arguments.
+
+**Category D — USDC integration (4 tests):** trade() pulls correct USDC amount from trader; reverts without approval; reverts on insufficient balance; depositLiquidity() transfers USDC and emits event.
+
+**Category E — Resolution and claim (7 tests):** resolve() reverts when undercollateralized; succeeds after top-up; single winner receives proportional pool; two winners split proportionally (Alice 2× Bob); loser cannot claim; cannot claim twice; cannot claim before resolution.
 
 Run locally:
 

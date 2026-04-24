@@ -244,7 +244,7 @@ Our LS-LMSR AMM woould essentially sit on top of this layer, interacting with th
 
 A working Solidity implementation of the Layer 2 LS-LMSR automated market
 maker is deployed and live on Base Sepolia at
-[`0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B`](https://sepolia.basescan.org/address/0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B).
+[`0xb7Bd56113438961202EcFF985E7Cb2B9F2442475`](https://sepolia.basescan.org/address/0xb7Bd56113438961202EcFF985E7Cb2B9F2442475).
 The contract implements the LS-LMSR cost function, marginal pricing, and
 trading mechanics described in the whitepaper, using PRBMath's UD60x18
 fixed-point type for `exp`/`ln` operations. 14 unit tests pass, covering
