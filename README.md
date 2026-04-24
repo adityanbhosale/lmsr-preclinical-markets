@@ -256,6 +256,14 @@ deployment coordinates, architecture notes, test coverage detail, and a
 walkthrough of implementation decisions and roadblocks.
 
 ---
+### CCTP cross-chain demo
+
+Outbound leg (Sepolia burn → Base Sepolia mint + trade) complete. Return
+leg (resolve → claim → CCTP back to Sepolia) scripted and deferred pending
+testnet USDC liquidity. See [docs/cctp-demo.md](docs/cctp-demo.md) for
+transaction hashes and resumption steps.
+
+---
 
 ## Downstream Product Implications
 
