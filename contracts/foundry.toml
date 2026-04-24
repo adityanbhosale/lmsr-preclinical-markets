@@ -13,7 +13,7 @@ remappings = [
 
 [rpc_endpoints]
 base_sepolia = "https://sepolia.base.org"
-sepolia = "https://eth-sepolia.public.blastapi.io"
+sepolia = "https://ethereum-sepolia-rpc.publicnode.com"
 
 [etherscan]
 base_sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 84532 }
