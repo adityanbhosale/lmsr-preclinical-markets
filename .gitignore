@@ -5,3 +5,16 @@ contracts/broadcast/
 contracts/cache/
 contracts/out/
 
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Backups
+*.bak
+
+# CCTP runtime artifacts
+contracts/.cctp-*
+
+# Node dependencies (in case any subdirectory installs them)
+**/node_modules/
