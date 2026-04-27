@@ -67,10 +67,9 @@ export function Layer1Display() {
     query: { refetchInterval: 30_000 },
   });
 
-  const verifiedCount =
-    verifications?.filter(
-      (v) => v.status === 'success' && v.result === true
-    ).length ?? 0;
+  const verifiedCount = verifications?.filter(
+    (v) => v.status === 'success' && Boolean(v.result)
+  ).length ?? 0;
 
   return (
     <section className="border border-border rounded-lg p-6 space-y-4">
