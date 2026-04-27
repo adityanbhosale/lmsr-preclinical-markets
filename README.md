@@ -226,6 +226,10 @@ Layer 2 lives on **Base** for low transaction costs and USDC-native infrastructu
 
 ## Testnet Reference Implementation
 
+**Live demo:** `<https://dual-layerbiotechliquidity.vercel.app/>` — connect a wallet on Base Sepolia and trade against the live LS-LMSR market. No setup required. Source in [`frontend/`](frontend/).
+
+**Repository structure:** Layer 1 + Layer 2 contracts in [`contracts/`](contracts/), Next.js demo in [`frontend/`](frontend/), full deployment + reproducibility docs in [`docs/`](docs/).
+
 A working Solidity implementation of the full dual-layer architecture is deployed across Ethereum Sepolia (Layer 1) and Base Sepolia (Layer 2), with Circle CCTP connecting the two. All contracts are verified on their respective block explorers and reproducible from the `contracts/` subdirectory via Foundry.
 
 ### Key deployment coordinates
@@ -235,6 +239,7 @@ A working Solidity implementation of the full dual-layer architecture is deploye
 | Layer 2 LSLMSR V3 (USDC-settling AMM with claim) | Base Sepolia | [`0xb7Bd56113438961202EcFF985E7Cb2B9F2442475`](https://sepolia.basescan.org/address/0xb7Bd56113438961202EcFF985E7Cb2B9F2442475) | ✓ |
 | Layer 1 MilestoneRegistry (ERC-3643 four-token ladder) | Ethereum Sepolia | [`0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D`](https://sepolia.etherscan.io/address/0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D) | ✓ |
 | CCTP outbound demo (Sepolia → Base Sepolia burn tx) | Ethereum Sepolia | [`0xb5d51882a2a26fe24d38785709022d762475d84d4e0e2ff84dea1d144baa6452`](https://sepolia.etherscan.io/tx/0xb5d51882a2a26fe24d38785709022d762475d84d4e0e2ff84dea1d144baa6452) | — |
+| Live demo (Next.js + wagmi + RainbowKit) | Vercel | `<https://dual-layerbiotechliquidity.vercel.app/>` | — |
 
 Full deployment coordinates, architecture notes, and roadblock documentation are in [`docs/testnet-implementation.md`](docs/testnet-implementation.md). CCTP demo walkthrough with all transaction hashes is in [`docs/cctp-demo.md`](docs/cctp-demo.md).
 
@@ -268,6 +273,14 @@ Simplifications from full T-REX documented in `docs/testnet-implementation.md`: 
 **CCTP cross-chain demo** (`contracts/script/cctp/`, `contracts/scripts/cctp_poll.js`)
 
 Four Foundry scripts plus a Node.js attestation poller (ethers v6) implementing a full round-trip: burn USDC on Sepolia → Circle attestation → mint on Base Sepolia → trade on Layer 2 → resolve → claim → CCTP return → final mint on Sepolia.
+
+**Frontend** (`frontend/`)
+
+Next.js 14 (App Router) + wagmi v2 + RainbowKit v2 + Tailwind/shadcn. Built in four phases: (1) provider scaffold with SSR-safe wagmi/WalletConnect wiring, (2) read-only market data with 12-second polling, (3) connected-wallet position tracking + Layer 1 read-only display (cross-chain render), (4) trade form with single-button approve+trade UX.
+
+The frontend is a thin client over the deployed contracts — no indexer, no database, no cached state beyond React Query's in-memory cache. Every value displayed is a fresh `eth_call` on the public RPC. Same credibility property as the contracts themselves: a partner can independently verify any number on the page via `cast` or Etherscan.
+
+Deployed on Vercel; source reproducible via `cd frontend && npm install && npm run dev`.
 
 **Outbound leg is complete on testnet** and fully documented with transaction hashes in [`docs/cctp-demo.md`](docs/cctp-demo.md). The return leg (resolve + claim + CCTP back to Sepolia) is scripted, committed, and deferred pending additional testnet USDC liquidity; resumption steps are in the same doc.
 
