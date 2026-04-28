@@ -10,6 +10,10 @@ import {
   formatUsdcNumber,
 } from '@/lib/format';
 
+export interface PositionCardProps {
+  marketAddress: `0x${string}`;
+}
+
 /**
  * PositionCard — shows the connected wallet's Layer 2 position and an
  * implied-payout calculation.
@@ -19,11 +23,11 @@ import {
  * pool change. This is the right framing for an unresolved market: it's
  * "what would I claim if this resolved RIGHT NOW," not a guarantee.
  */
-export function PositionCard() {
+export function PositionCard({ marketAddress }: PositionCardProps) {
   const { address, isConnected } = useAccount();
 
   const baseConfig = {
-    address: CONTRACTS.lslmsr.address,
+    address: marketAddress,
     abi: lslmsrAbi,
     chainId: CONTRACTS.lslmsr.chainId,
     query: {
@@ -62,7 +66,7 @@ export function PositionCard() {
     abi: erc20Abi,
     chainId: CONTRACTS.usdc.chainId,
     functionName: 'balanceOf',
-    args: [CONTRACTS.lslmsr.address],
+    args: [marketAddress],
     query: { refetchInterval: 12_000 },
   });
 

@@ -16,6 +16,10 @@ import { formatUsdcNumber, formatUsdc } from '@/lib/format';
 type Side = 'yes' | 'no';
 type FlowStep = 'idle' | 'approving' | 'awaiting_approve' | 'trading' | 'awaiting_trade';
 
+export interface TradeFormProps {
+  marketAddress: `0x${string}`;
+}
+
 /**
  * TradeForm — buy YES or NO shares.
  *
@@ -34,7 +38,7 @@ type FlowStep = 'idle' | 'approving' | 'awaiting_approve' | 'trading' | 'awaitin
  * Future improvement: contract-side `tradeWithPermit` would collapse
  * this to a single signature. Documented but not implemented.
  */
-export function TradeForm() {
+export function TradeForm({ marketAddress }: TradeFormProps) {
   const { address, isConnected, chain } = useAccount();
   const onCorrectChain = chain?.id === CONTRACTS.lslmsr.chainId;
 
@@ -57,7 +61,7 @@ export function TradeForm() {
 
   // Read live cost preview from contract
   const { data: costUD60x18 } = useReadContract({
-    address: CONTRACTS.lslmsr.address,
+    address: marketAddress,
     abi: lslmsrAbi,
     chainId: CONTRACTS.lslmsr.chainId,
     functionName: 'costOfTrade',
@@ -80,7 +84,7 @@ export function TradeForm() {
     abi: erc20Abi,
     chainId: CONTRACTS.usdc.chainId,
     functionName: 'allowance',
-    args: address ? [address, CONTRACTS.lslmsr.address] : undefined,
+    args: address ? [address, marketAddress] : undefined,
     query: {
       enabled: !!address,
       refetchInterval: 12_000,
@@ -125,7 +129,7 @@ export function TradeForm() {
     refetchAllowance();
     setStep('trading');
     writeTrade({
-      address: CONTRACTS.lslmsr.address,
+      address: marketAddress,
       abi: lslmsrAbi,
       chainId: CONTRACTS.lslmsr.chainId,
       functionName: 'trade',
@@ -169,13 +173,13 @@ export function TradeForm() {
         abi: erc20Abi,
         chainId: CONTRACTS.usdc.chainId,
         functionName: 'approve',
-        args: [CONTRACTS.lslmsr.address, costUSDC + 10n ** 6n], // a touch of slack
+        args: [marketAddress, costUSDC + 10n ** 6n], // a touch of slack
       });
       setStep('awaiting_approve');
     } else {
       setStep('trading');
       writeTrade({
-        address: CONTRACTS.lslmsr.address,
+        address: marketAddress,
         abi: lslmsrAbi,
         chainId: CONTRACTS.lslmsr.chainId,
         functionName: 'trade',

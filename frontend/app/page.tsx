@@ -4,6 +4,7 @@ import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useChainId } from 'wagmi';
 import { useEffect, useState } from 'react';
 import { MarketHeader } from '@/components/MarketHeader';
+import { MarketSelector } from '@/components/MarketSelector';
 import { SolvencyIndicator } from '@/components/SolvencyIndicator';
 import { PositionCard } from '@/components/PositionCard';
 import { TradeForm } from '@/components/TradeForm';
@@ -11,11 +12,19 @@ import { Layer1Display } from '@/components/Layer1Display';
 import { FaucetPrompt } from '@/components/FaucetPrompt';
 import { ArchitectureSidebar } from '@/components/ArchitectureSidebar';
 import { CONTRACTS } from '@/lib/contracts';
+import { MARKETS, type Market } from '@/lib/markets';
 import { truncateAddress } from '@/lib/format';
 
 export default function HomePage() {
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
+
+  const [selectedMarketId, setSelectedMarketId] = useState<string>(
+    MARKETS[0].id
+  );
+
+  const currentMarket: Market =
+    MARKETS.find((m) => m.id === selectedMarketId) ?? MARKETS[0];
 
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -43,14 +52,29 @@ export default function HomePage() {
           {/* Inline explainer for visitors */}
           <ArchitectureSidebar />
 
+          <MarketSelector
+            selectedId={selectedMarketId}
+            onSelect={setSelectedMarketId}
+          />
+
           {/* Layer 2 market */}
-          <MarketHeader />
-          <SolvencyIndicator />
+          <MarketHeader
+            marketAddress={currentMarket.address}
+            market={currentMarket}
+          />
+          <SolvencyIndicator marketAddress={currentMarket.address} />
 
           {/* Trading section — connected wallet only */}
           {mounted && isConnected && <FaucetPrompt />}
-          {mounted && <TradeForm />}
-          {mounted && <PositionCard />}
+          {mounted && (
+            <TradeForm
+              key={currentMarket.address}
+              marketAddress={currentMarket.address}
+            />
+          )}
+          {mounted && (
+            <PositionCard marketAddress={currentMarket.address} />
+          )}
 
           {/* Layer 1 read-only display — always visible */}
           <Layer1Display />
@@ -85,12 +109,12 @@ export default function HomePage() {
             <div>
               Layer 2 contract:{' '}
               <a
-                href={`${CONTRACTS.lslmsr.explorer}/address/${CONTRACTS.lslmsr.address}`}
+                href={`${CONTRACTS.lslmsr.explorer}/address/${currentMarket.address}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-mono hover:text-foreground transition-colors underline-offset-2 hover:underline"
               >
-                {truncateAddress(CONTRACTS.lslmsr.address)}
+                {truncateAddress(currentMarket.address)}
               </a>{' '}
               on Base Sepolia
             </div>

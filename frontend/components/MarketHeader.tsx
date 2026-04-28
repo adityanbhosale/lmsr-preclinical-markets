@@ -1,9 +1,15 @@
 'use client';
 
 import { useReadContract } from 'wagmi';
-import { CONTRACTS, MARKET_METADATA } from '@/lib/contracts';
+import { CONTRACTS } from '@/lib/contracts';
+import type { Market } from '@/lib/markets';
 import { lslmsrAbi } from '@/lib/abi/lslmsr';
 import { formatProbability, formatShares } from '@/lib/format';
+
+export interface MarketHeaderProps {
+  marketAddress: `0x${string}`;
+  market: Market;
+}
 
 /**
  * Hero component — displays the current YES probability prominently,
@@ -12,9 +18,9 @@ import { formatProbability, formatShares } from '@/lib/format';
  *
  * Polls every 12 seconds (matching Base Sepolia's typical block time).
  */
-export function MarketHeader() {
+export function MarketHeader({ marketAddress, market }: MarketHeaderProps) {
   const baseConfig = {
-    address: CONTRACTS.lslmsr.address,
+    address: marketAddress,
     abi: lslmsrAbi,
     chainId: CONTRACTS.lslmsr.chainId,
     query: { refetchInterval: 12_000 },
@@ -51,10 +57,10 @@ export function MarketHeader() {
       <div>
         <div className="flex items-baseline gap-3 mb-1">
           <h2 className="text-base font-semibold tracking-tight">
-            {MARKET_METADATA.program}
+            {market.program}
           </h2>
           <span className="text-xs text-muted-foreground">
-            · {MARKET_METADATA.milestone}
+            · {market.milestone}
           </span>
           {resolved && (
             <span className={`text-xs px-2 py-0.5 rounded ${
@@ -67,7 +73,7 @@ export function MarketHeader() {
           )}
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          {MARKET_METADATA.description}
+          {market.description}
         </p>
       </div>
 
@@ -86,7 +92,7 @@ export function MarketHeader() {
         <div className="ml-auto text-xs text-muted-foreground text-right">
           <div>Resolution target</div>
           <div className="font-semibold text-foreground">
-            {MARKET_METADATA.resolutionTarget}
+            {market.resolutionTarget}
           </div>
         </div>
       </div>
