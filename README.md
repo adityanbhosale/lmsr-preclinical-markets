@@ -240,6 +240,10 @@ A working Solidity implementation of the full dual-layer architecture is deploye
 | Layer 1 MilestoneRegistry (ERC-3643 four-token ladder) | Ethereum Sepolia | [`0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D`](https://sepolia.etherscan.io/address/0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D) | ✓ |
 | CCTP outbound demo (Sepolia → Base Sepolia burn tx) | Ethereum Sepolia | [`0xb5d51882a2a26fe24d38785709022d762475d84d4e0e2ff84dea1d144baa6452`](https://sepolia.etherscan.io/tx/0xb5d51882a2a26fe24d38785709022d762475d84d4e0e2ff84dea1d144baa6452) | — |
 | Live demo (Next.js + wagmi + RainbowKit) | Vercel | `<https://dual-layerbiotechliquidity.vercel.app/>` | — |
+| Layer 2 — sotorasib IND filing  | Base Sepolia | `0xb7Bd56113438961202EcFF985E7Cb2B9F2442475` | ✓ verified |
+| Layer 2 — adagrasib Phase 2     | Base Sepolia | `0x15c463dcc7393ce70B83a1Cd28F0C8859883e2B4` | ✓ verified |
+| Layer 2 — vepdegestrant Phase 3 | Base Sepolia | `0xA88A5781904e884eA0f8b2aFF749904c602055E6` | ✓ verified |
+| Layer 2 — BI-1701963 approval   | Base Sepolia | `0x1922A8823Ba0D49bacde732B1C97996BeDC42068` | ✓ verified |
 
 Full deployment coordinates, architecture notes, and roadblock documentation are in [`docs/testnet-implementation.md`](docs/testnet-implementation.md). CCTP demo walkthrough with all transaction hashes is in [`docs/cctp-demo.md`](docs/cctp-demo.md).
 
