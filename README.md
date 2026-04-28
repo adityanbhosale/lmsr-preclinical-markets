@@ -330,7 +330,45 @@ where:
 
 **Open question 3:** Does calibration-weighted `ldi_calibrated` produce strictly better incentive-compatibility properties than volume-weighted `ldi` under all conditions?
 
-**Open question 4:** Should the oracle-attested probability model be treated as a proper scoring rule input (cf. Roughgarden & Neyman, 2023) or as a Bayesian prior updated by a separate mechanism?
+**Open Market Opportunity:** Should the oracle-attested probability model be treated as a proper scoring rule input (cf. Roughgarden & Neyman, 2023) or as a Bayesian prior updated by a separate mechanism?
+
+**Open question 5: Hedging mechanism for institutional biotech HFs.
+
+  Context: HFs running long-only or L/S fundamental strategies hold positions in publicly-trades equities or directly in private milestone payment rights (via royalty deals, structured notes, PIPEs, etc.). P&L is driven by binary clinical events (Ph3 readouts, FDA BLA decisions / PDUFA, trial readouts).
+
+  Hedging Problem: cannot isolate the event risk of an upcoming binary catalyst from the rest of a fund's position in the market. Current options include:
+
+  1. Sell position – loses upside if event resolves favorably; transaction costs
+
+  2. Buy puts on the underlying equity – extensive (volume gets bid up before catalysts), only available for public names (liquid) 
+
+  3. Short-related names as a hedge – introduces basis risk; short may not move with target catalyst
+
+  4. No action – take full event risk on ledger
+
+Layer 2 LS-LMSR solution – isolate event risk as a tradeable instrument, hedging it independently.
+
+If a fund holds, for example, a $50M position in Moderna common shares, and the company has a Phase 2 readout upcoming for an oncology asset in 6 weeks. PM thinks broader thesis (mRNA platform value) is intact regardless of the readout, but doessn't want to take binary exposure to this one trial. Layer 2 contains an event contract referencing "Moderna's mRNA-XXXX Phase 2 hits primary endpiont by 4Q26". If that contract is currently trading at $0.55 (implied 55% probabily of success), and the fund's analyst believes the concensus is correct and wants to neutralize exposure specifically to this trial, the fund can buy NO shares on Layer 2 sized to offset the position-level event ∆.
+
+Say the readout fails, the equity position drops 30%, but the NO shares pay $1 / share, which recovers some or all of the position-level loss. If the readout fails, the equity position appreciates and the NO shares go to zero (cost of the hedge is negligible compared to the equity position upside).
+
+Net effect: fund holds Moderna for the long-term thesis, isolates the event-specific risk, pays a defined cost to do so.
+
+What makes this structurally unique from existing hedging strategies?
+
+  1. Granularity – although this converges on single-asset names
+
+  2. Availability – listed options only exist for sufficiently liquid names. A clinical-stage company with $400M market cap may have minimal options market, or only weekly/monthly expirations that don't align with the catalyst. Private milestone payment rights have no options market. Layer 2 contracts can be created for any event with a verifiable resolution source – including private assets, milestone payments, sub-segment programs of public companies.
+
+  3. Pricing efficiency – volume skew on biotech catalyst options is usually quite dramatic – volume prices in before the catalyst as more participants demand the hedge, making puts expensive. A Layer 2 prediction market could in theory price more efficiently since the underlying isn't the equity (which has its own beta exposure baked in) but the binary outcome itself. This is, in principle, tighter pricing, less skew, lower hedging costs.
+
+Concerns:
+  1. Basis risk between Layer 2 contract and the actual position-level P&L.
+     Confounding variables (i.e. sector moves, earnings, pipeline news, sentiment) means that the relation between equity move and event outcome is not 1:1. Hedge is correlated with position P&L, not perfectly aligned. 
+  2. Liquidity at institutional size
+  3. Counterparty risk and settlement
+
+Advancements: The dual-layer architecture produces advantages for institutional hedging. First, **Layer 1 holders are the natural counterparty for Layer 2 NO shares**. Layer 1 creates a venue for institutional hedgers to buy NO. The dual layer architectyre is structurally a hedging-friendly design because one layer holds the long economic exposure (SPV) and the other layer's hedgers want to short (LS-LMSR). Finally, **the credentialed expert layer adds price-discovery quality that bare prediction markets lack**. HF wouldn't trust Polymarket's price on a clinical readout because the participants are mostly retail. The ABMM + credentialed retreat in Layer 2 means the price is conditioned on domain expertise.
 
 ### Legal and Architectural Open Questions
 
