@@ -1,0 +1,48 @@
+# Automated Bioactivity Market Maker (ABMM)
+
+The ABMM is the cold-start mechanism that solves the bootstrapping problem for thin credentialed markets with no organic retail flow. Rather than deploying an LS-LMSR market with q_yes = q_no = 0 (the symmetric prior, which says nothing), the ABMM seeds an asymmetric initial position derived from a confidence-weighted prior over the milestone outcome, then *retreats* as credentialed trading volume accumulates.
+
+## Seeding formula
+
+The initial ABMM position for a market with target probability p* is:
+
+```
+q_yes = eff_conf · 80
+q_no  = (1 − eff_conf) · 80
+```
+
+where the effective confidence blends model confidence with literature evidence:
+
+```
+eff_conf = conf × 0.6 + lit_score × 0.4
+```
+
+The constants (80 for total outstanding, 0.6/0.4 weights) are calibrated empirically against the four backtest programs — see [Backtests](/mechanism/backtests).
+
+## The retreat function
+
+The ABMM is *not* a permanent market participant. As credentialed traders submit trades, the ABMM's influence on the market price decays via an exponential retreat:
+
+```
+w(t) = exp( −log(2) / 0.35 · LDI_credentialed )
+```
+
+where `LDI_credentialed` is the cumulative Liquidity-Depth-Index of trades submitted by credentialed accounts (incremented by `amount / (q_yes + q_no)` per trade). The 0.35 half-life parameter means the ABMM's influence halves every 0.35 LDI units — typically reached after 5-10 substantive credentialed trades.
+
+The exponential form (rather than linear) is justified by the requirement that the retreat must be smooth at t=0 (so the seeded prior remains informative for the first few trades) and asymptotically vanishing (so the market price is eventually determined entirely by credentialed flow). A linear retreat fails the first property; a step function fails the second.
+
+See [Retreat function — derivation and open question](/mechanism/retreat-function).
+
+## What the ABMM is *not*
+
+Three clarifications worth foregrounding:
+
+1. **Not a counterparty.** The ABMM does not hold a position against credentialed traders. It seeds the LS-LMSR's q_yes / q_no state at deploy time and that's it. All subsequent trades are against the LS-LMSR's standard cost function.
+2. **Not arbitrageable.** Because the ABMM exits at deploy time (it does not place ongoing trades), there is no separate ABMM order to trade against. The seeded prior is simply the market's starting point.
+3. **Not a confidence interval.** `eff_conf` is a point estimate from the off-chain pipeline. The market's job is to discover the true probability; the ABMM's job is to give it a reasonable starting place rather than 50/50.
+
+## See also
+
+- [LS-LMSR](/layer-2/ls-lmsr)
+- [Retreat function derivation](/mechanism/retreat-function)
+- [Backtest results](/mechanism/backtests)

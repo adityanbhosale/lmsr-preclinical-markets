@@ -1,0 +1,51 @@
+# LS-LMSR
+
+The Liquidity-Sensitive Logarithmic Market Scoring Rule (Othman, Pennock, Reeves, Sandholm 2010) extends Hanson's LMSR by making the liquidity parameter `b` a function of cumulative outstanding shares.
+
+## The cost function
+
+Standard LMSR uses a constant `b`:
+
+```
+C(q) = b · log( Σ exp(qᵢ / b) )
+```
+
+LS-LMSR replaces the constant with a quantity-dependent `b`:
+
+```
+b(q) = α · Σ qᵢ
+```
+
+substituted into the same cost function:
+
+```
+C(q) = b(q) · log( Σ exp(qᵢ / b(q)) )
+```
+
+The implementation uses PRBMath UD60x18 fixed-point arithmetic on-chain (since the EVM has no native floating-point), with α typically set in the range 0.005 to 0.08.
+
+## Why LS-LMSR over LMSR
+
+A constant `b` forces a tradeoff: small `b` makes prices responsive but caps worst-case loss tightly (so the AMM can absorb little volume); large `b` accommodates more volume but makes early prices unresponsive. Either way, an event contract with unknown ex-ante demand has to commit to a wrong `b` somewhere on the curve.
+
+LS-LMSR resolves this by letting `b` *grow with the market*. Three properties follow:
+
+1. **Thin-market responsiveness.** When total volume is low, `b` is small, and small trades move prices substantially. Early traders are rewarded for taking directional positions before the market thickens.
+2. **Adaptive liquidity.** As volume accumulates, `b` rises, deepening the effective book. Late-stage manipulation requires geometrically more capital than an early move.
+3. **Bounded subsidy growth.** The market maker's worst-case loss still scales logarithmically rather than linearly in shares outstanding.
+
+## Why LS-LMSR over a CFMM
+
+Constant-function market makers (the Uniswap class) work for assets with approximately known fundamental value and roughly two-sided flow. Event contracts have neither property: flow is one-sided until resolution approaches, and the fundamental value is precisely what the market is supposed to discover.
+
+A CFMM in this setting either:
+- burns through LP capital via adverse selection (Loss-versus-Rebalancing, Milionis et al. 2022) — informed traders systematically extract value from passive LPs as the true probability is revealed, or
+- quotes uselessly wide spreads as LPs price in expected adverse selection, destroying the price-discovery surface.
+
+LS-LMSR sidesteps this because the AMM does not hold a passive LP position to be adversely selected against — it issues fresh outcome shares against a bounded subsidy budget, and the subsidy is the cost of the price-discovery service.
+
+## See also
+
+- [ABMM seeding](/layer-2/abmm)
+- [Mechanism Design — open theoretical question](/mechanism)
+- [Layer 2 deployment](/layer-2/deployment)

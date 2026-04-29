@@ -1,0 +1,34 @@
+# Mechanism Design
+
+The dual-layer architecture's price-discovery surface is an LS-LMSR seeded by an Automated Bioactivity Market Maker (ABMM) that retreats as credentialed trading volume accumulates. The combination is the central distinctive piece of the mechanism design — the place where the project diverges from a standard prediction market template.
+
+## The design problem
+
+A naive LS-LMSR market for an event-triggered RWA fails at cold start. With no seeded prior, the market opens at the symmetric prior (50/50). A sophisticated trader arriving on day one has no reason to take the first directional position — there's no compensation for moving the market away from a prior that contains zero information. Without that first move, the market sits at 50/50 indefinitely, and the price-discovery surface is dead on arrival.
+
+The standard solution in DeFi prediction markets has been to bootstrap with retail flow — Polymarket-class venues rely on speculator volume to push prices toward informed equilibrium. This works for sports and elections but breaks for event-triggered RWAs:
+
+- **No retail flow.** Biotech milestone outcomes are not entertaining to speculate on; they require domain knowledge to price.
+- **Credentialed counterparties only.** Even in a permissionless venue, the *informed* traders are specialty pharma analysts and clinical experts, not retail.
+- **Long resolution horizons.** Markets on Phase 2 readouts may live for 18-24 months. Speculation alone cannot sustain price discovery across that horizon.
+
+## The ABMM resolution
+
+The ABMM seeds an asymmetric initial position derived from a confidence-weighted prior (model confidence + literature evidence), giving the first credentialed trader a *meaningful* directional starting point to push against. As credentialed flow accumulates, the ABMM retreats — its influence decays exponentially with cumulative LDI, so the eventual market price is determined by credentialed flow, not by the seeded prior.
+
+## The open theoretical question
+
+The mechanism is implementable and has been validated empirically against four backtest programs (see [Backtests](/mechanism/backtests)). The open theoretical question is the distortion bound:
+
+> Is `w(t) · q_abmm ≤ δ(ε, α, p*)` derivable from Theorem 3.4 of Bahrani, Garimidi & Roughgarden (2023), and does the bound hold throughout the retreat trajectory?
+
+This is the question worth surfacing for technical evaluators (Paradigm, Robot Ventures, Variant). The mechanism theory is grounded in established AGT results, and the empirical retrospective validation is positive. The remaining frontier is proving that the seeded-prior distortion is bounded throughout the retreat — not just at the asymptote.
+
+The current best understanding is that the bound *does* hold under the regime α ∈ [0.005, 0.08] where the LS-LMSR is conventionally calibrated, but a formal proof would require extending Theorem 3.4 to handle the time-varying weight w(t) rather than the static IC condition the original paper analyzes.
+
+## See also
+
+- [LS-LMSR](/layer-2/ls-lmsr)
+- [ABMM seeding](/layer-2/abmm)
+- [Retreat function — derivation](/mechanism/retreat-function)
+- [Backtests](/mechanism/backtests)

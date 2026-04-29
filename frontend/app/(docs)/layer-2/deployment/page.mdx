@@ -1,0 +1,36 @@
+# Layer 2 Deployment Coordinates
+
+LS-LMSR V3 deployed and verified on Base Sepolia. USDC-denominated, ABMM-seeded.
+
+<ContractAddress
+  label="LSLMSR V3"
+  chain="base-sepolia"
+  address="0xb7Bd56113438961202EcFF985E7Cb2B9F2442475"
+/>
+
+<ContractAddress
+  label="USDC (Circle, Base Sepolia)"
+  chain="base-sepolia"
+  address="0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+/>
+
+## Multi-market expansion
+
+The four backtest programs (sotorasib, adagrasib, vepdegestrant, BI-1701963) are each represented by their own LSLMSR contract instance. Addresses are populated in `frontend/lib/markets.ts`.
+
+## Reproducing the deployment
+
+```bash
+cd contracts
+forge install
+forge test -vv --match-path test/Layer2.t.sol
+source .env
+forge script script/DeployLayer2.s.sol:DeployLayer2 --rpc-url base-sepolia --broadcast --verify
+```
+
+## See also
+
+- [LS-LMSR mechanism](/layer-2/ls-lmsr)
+- [ABMM seeding](/layer-2/abmm)
+- [All deployment coordinates](/deployment)
+- [Live Markets ↗](/markets)

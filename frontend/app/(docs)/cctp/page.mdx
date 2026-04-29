@@ -1,0 +1,49 @@
+# Circle CCTP Bridge
+
+The dual-layer architecture splits two functions across two chains. Capital must move between them. Circle's Cross-Chain Transfer Protocol (CCTP) is the bridge — chosen specifically to avoid the institutional counterparty risk that wrapped-bridge designs introduce.
+
+## Why CCTP over a wrapped bridge
+
+Custodial bridges (Wormhole, Multichain, etc.) have been the single most exploited primitive in crypto by total dollars lost. The trust model is: a multisig or validator set holds the source-chain assets and mints wrapped representations on the destination chain. The wrapped tokens are an IOU against the bridge operators.
+
+CCTP is fundamentally different. It does not custody assets. Instead:
+
+1. The user calls `depositForBurn` on the source-chain CCTP contract, which **burns** USDC on the source chain.
+2. Circle's off-chain attestation service observes the burn and signs an attestation.
+3. The user (or anyone) submits the attestation to the destination-chain CCTP contract, which **mints** fresh USDC on the destination chain.
+
+The total USDC supply across all chains is preserved. There is no wrapped IOU and no new custodial counterparty. The trust assumption is: Circle (whose USDC peg institutional users are *already* trusting) honors its attestations.
+
+For institutional readers, this is the central de-risking property of the architecture's cross-chain component: the bridge does not introduce a new trust assumption beyond ones the institution has already accepted by holding USDC.
+
+## CCTP coordinates
+
+<ContractAddress
+  label="MessageTransmitter (Sepolia)"
+  chain="sepolia"
+  address="0x7865fAfC2db2093669d92c0F33AeEF291086BEFD"
+/>
+
+<ContractAddress
+  label="USDC (Sepolia)"
+  chain="sepolia"
+  address="0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+/>
+
+The Base Sepolia CCTP contracts are read from Circle's testnet documentation; the USDC address is the one already in use by Layer 2.
+
+## What the demo proves
+
+The demo executes a full round-trip: Sepolia → Base Sepolia → trade against a live LS-LMSR market → claim payout → Base Sepolia → Sepolia. Three transaction hashes across two chains can be traced end-to-end. Capital left Layer 1's chain, was attested by Circle, arrived on Layer 2's chain, was consumed by a trade, and was returned to Layer 1's chain at the end.
+
+The connection between the layers is now an operational fact, not just an architectural diagram.
+
+## On the 15-minute Sepolia finality wait
+
+Ethereum mainnet (and therefore Sepolia) has a ~15-minute finality window before Circle will issue an attestation. Avalanche, by contrast, has near-instant finality and CCTP attestations arrive in under a minute. The wait time is a property of Ethereum's security model, not of CCTP. Production deployments would inherit the same wait — it is a feature of trustless cross-chain bridging, not a limitation of the demo.
+
+## See also
+
+- [Outbound leg — Sepolia → Base Sepolia](/cctp/outbound)
+- [Return leg — Base Sepolia → Sepolia](/cctp/return)
+- [All deployment coordinates](/deployment)

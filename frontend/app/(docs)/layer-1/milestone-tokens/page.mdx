@@ -1,0 +1,36 @@
+# Milestone Tokens
+
+Each backtest program corresponds to a single MilestoneToken instance — an ERC-3643-extended token representing fractional ownership of the SPV's claim against that program's milestone payment.
+
+The four currently deployed:
+
+| Program | Outcome | Resolution target |
+|---|---|---|
+| Sotorasib | Approved | Q4 2026 (backtest) |
+| Adagrasib | Approved | Q2 2027 (backtest) |
+| Vepdegestrant | Approved | Q3 2026 (backtest) |
+| BI-1701963 | Terminated | Q4 2025 (backtest) |
+
+The terminated case (BI-1701963) is intentional — it tests that the Layer 1 distribution logic correctly returns the SPV's invested capital to membership holders rather than paying out a milestone that never materialized, and that the Layer 2 market resolves to NO without the Layer 1 token holders losing their fractional claim on the residual SPV assets.
+
+## Why one token per program rather than one shared token
+
+A shared token (ERC-1155 multi-asset) would have been more gas-efficient at deploy time, but breaks the SPV legal model: each milestone is a separate Reg D 506(c) offering with its own subscription documents, accreditation date, and lock-up clock. Membership interests in one offering are not fungible with another. ERC-1155 would require enforcing per-token-ID compliance rules in a single contract — workable but needlessly complex when ERC-3643 + a registry factory already gives clean per-program isolation.
+
+## Extension fields
+
+`MilestoneToken.sol` adds five immutable fields to the base T-REX `Token.sol`:
+
+- `programName` — human-readable string, set in constructor
+- `milestoneDescription` — longer-form description of the resolving event
+- `resolutionTarget` — UNIX timestamp of the expected resolution date
+- `claimId` — identifier matching the on-chain Identity Registry's claim topic
+- `lslmsrAddress` — pointer to the Layer 2 market that references this token's outcome
+
+The `lslmsrAddress` field is the only cross-layer reference in the architecture. It is informational — the Layer 1 token does not check Layer 2 state during transfers or vice versa. The two layers settle independently against the off-chain outcome.
+
+## See also
+
+- [ERC-3643 / T-REX](/layer-1/erc-3643)
+- [Layer 1 deployment](/layer-1/deployment)
+- [Backtest results](/mechanism/backtests)

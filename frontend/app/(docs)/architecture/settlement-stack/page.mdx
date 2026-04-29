@@ -1,0 +1,40 @@
+# Settlement Stack
+
+The architecture operates across two chains with distinct settlement assets:
+
+- **Ethereum mainnet (Sepolia testnet)** — Layer 1 SPV, ERC-3643 compliance, legal-ownership registry. Cash flows in fiat (or, in a future institutional deployment, in deposit tokens like JPMD).
+- **Base (Base Sepolia testnet)** — Layer 2 LS-LMSR market, USDC settlement, permissionless trading.
+
+This split reflects both the technical and legal architecture. Ethereum mainnet provides the institutional trust, security, and ERC-3643 ecosystem maturity required for a regulated security. Base provides the throughput and fee structure required for continuous price discovery — sub-cent transaction costs, sub-second confirmation times, full EVM compatibility.
+
+## Why USDC on Layer 2
+
+Three properties USDC offers that no alternative does:
+
+1. **Regulated-issuer trust.** Circle is supervised by NYDFS and is the counterparty institutional users are *already* trusting when they hold USDC. The architecture introduces no new trust assumption.
+2. **Native cross-chain via CCTP.** USDC is the only stablecoin with a non-wrapped, regulated-issuer cross-chain protocol at production scale. See [CCTP](/cctp).
+3. **Coinbase-Base alignment.** Base is Coinbase's L2; Coinbase is Circle's primary distribution partner; USDC is the canonical stablecoin on Base. The path to mainnet deployment is well-trodden.
+
+A future institutional deployment might substitute deposit tokens (JPMD) on Layer 2 for the same architectural reasons — the dual-layer split is asset-agnostic at the settlement level. The choice of USDC on testnet reflects what is currently deployable, not a commitment to USDC as the only viable settlement asset.
+
+## Why not deposit tokens (JPMD) on testnet
+
+JPMD is JPMorgan's deposit token — the first such token issued by a GSIB on a public blockchain (Base). It is the closest existing infrastructure to what an institutional deployment of Layer 2 would settle in. Two reasons it is not used in the testnet implementation:
+
+1. **No testnet.** JPMD is a permissioned production-only deployment. There is no testnet equivalent against which to validate the integration.
+2. **Permissioning.** JPMD holders must be JPM institutional clients; the testnet is designed to be reproducible by anyone with a Base Sepolia wallet.
+
+The architectural argument for JPMD-class settlement at Layer 2 in a production deployment is the same as for USDC at testnet: a regulated-issuer stablecoin, native to the destination chain, with cross-chain primitives that don't introduce wrapped-bridge risk. JPMD checks all three boxes for an institutional venue.
+
+## The CCTP bridge
+
+Capital moves between the two layers via Circle's Cross-Chain Transfer Protocol. USDC is burned on the source chain and minted on the destination chain — there is no wrapped representation, no custodial bridge, no new institutional counterparty.
+
+See [CCTP overview](/cctp), [Outbound leg](/cctp/outbound), and [Return leg](/cctp/return) for the operational details.
+
+## See also
+
+- [Regulatory Split](/architecture/regulatory-split)
+- [CCTP Bridge](/cctp)
+- [Layer 1](/layer-1)
+- [Layer 2](/layer-2)

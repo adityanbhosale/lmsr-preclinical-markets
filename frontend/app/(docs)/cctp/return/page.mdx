@@ -1,0 +1,27 @@
+# Return Leg — Base Sepolia → Sepolia
+
+After resolution, USDC must move back from Base Sepolia (where the LS-LMSR pays out winning outcome shares) to Ethereum Sepolia (where Layer 1 SPV holders may want to manage exposure or distribute proceeds).
+
+The return leg uses the same CCTP primitives as the outbound, with source and destination domains swapped.
+
+## Sequence
+
+1. **Claim payout on Base Sepolia.** The market resolver calls `resolve(outcome)` on the LSLMSR. Winners then call `claim()` to receive their proportional share of the contract's USDC balance.
+
+2. **Burn on Base Sepolia.** Caller invokes `depositForBurn` on the Base Sepolia TokenMessenger, targeting the Sepolia destination domain.
+
+3. **Attestation poll.** Same poller as outbound, with `--source base-sepolia`. Base Sepolia finality is faster than Sepolia (≈3 minutes typical), so attestations arrive sooner than on the outbound leg.
+
+4. **Final mint on Sepolia.** Caller invokes `receiveMessage(message, attestation)` on the Sepolia MessageTransmitter via `CctpFinalMint.s.sol`. USDC is minted on Sepolia and the round-trip is complete.
+
+## Why the round-trip matters
+
+The full Sepolia → Base → trade → claim → return demonstrates that the architecture does not have a one-way valve. Capital can flow in to Layer 2 to participate in price discovery, and flow back out to Layer 1 after resolution — all through the same Circle infrastructure, all in native USDC.
+
+In a production deployment with active counterparties, this round-trip property is what would let a specialty fund manage Layer 2 hedging exposure as an ongoing practice rather than a one-time commitment. Without it, the dual-layer thesis would be operationally awkward — capital would arrive at Layer 2 and remain stuck there.
+
+## See also
+
+- [Outbound leg](/cctp/outbound)
+- [CCTP overview](/cctp)
+- [`CctpFinalMint.s.sol` source](https://github.com/adityanbhosale/lmsr-preclinical-markets/blob/main/contracts/script/cctp/CctpFinalMint.s.sol)

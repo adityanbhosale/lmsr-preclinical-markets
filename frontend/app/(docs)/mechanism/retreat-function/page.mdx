@@ -1,0 +1,47 @@
+# Retreat Function
+
+The ABMM's influence on the market price decays as credentialed trading volume accumulates. The decay is exponential in cumulative Liquidity-Depth-Index (LDI):
+
+```
+w(t) = exp( −log(2) / 0.35 · LDI_credentialed )
+```
+
+where `LDI_credentialed` is incremented by `amount / (q_yes + q_no)` on every credentialed trade. The half-life parameter (0.35) is calibrated such that the ABMM's influence halves every 0.35 units of LDI — typically reached after 5-10 substantive credentialed trades.
+
+## Why exponential rather than linear
+
+Three properties the retreat function must satisfy:
+
+1. **Smooth at t = 0.** When the first credentialed trader arrives, the ABMM's seeded prior must remain informative. A linear retreat starts decaying immediately at full slope, which discounts the prior too aggressively in the regime where it carries the most information.
+2. **Asymptotically vanishing.** As cumulative credentialed flow grows, the ABMM's influence must approach zero. The market price should ultimately be determined by the most informed counterparties, not by an off-chain pipeline.
+3. **Monotonic.** The retreat must never reverse. Adding "fresh" ABMM weight after credentialed trades have already moved the market would create an obvious arb.
+
+A linear retreat fails property 1. A step function (e.g., "fully on for the first 10 trades, fully off thereafter") fails property 2 — there is a discontinuity at the transition point, and informed traders just before the step would move to the cheap side and immediately re-trade after the step at favorable prices. The exponential retreat satisfies all three.
+
+## Justification from active-block-producer literature
+
+The retreat function maps onto Bahrani, Garimidi & Roughgarden (2023) by treating the ABMM as an *active block producer* in their formal model:
+
+| Their model | This mechanism |
+|---|---|
+| Active block producer with private info | ABMM with off-chain prior |
+| Honest user submitting signal | Credentialed trader submitting trade |
+| Block-producer revenue | ABMM's influence weight w(t) |
+| Theorem 3.1 impossibility | Why a static seeding (no retreat) fails IC |
+| Theorem 3.4 ε-IC bound | Source of the distortion bound under retreat |
+
+The structural analogy is that both mechanisms must reconcile the producer's private information with eventual revelation by the participating agents. The retreat function is the active block producer "exiting" as the market accumulates sufficient credentialed signal.
+
+## The open theoretical question
+
+> Is `w(t) · q_abmm ≤ δ(ε, α, p*)` derivable from Theorem 3.4, and does the bound hold throughout the retreat trajectory?
+
+The bound exists at t = 0 (the seeded prior is by construction within ε of the off-chain pipeline's output) and at t → ∞ (the ABMM has no influence, so distortion is zero). The unsettled question is whether the bound holds *along* the retreat path — specifically, whether there exists some intermediate t at which the partial retreat creates a temporary distortion exceeding δ.
+
+Empirical evidence from the four backtest programs suggests no — see [Backtests](/mechanism/backtests). A formal proof would extend Theorem 3.4 to handle the time-varying weight w(t) rather than the static IC condition.
+
+## See also
+
+- [Mechanism overview](/mechanism)
+- [ABMM seeding](/layer-2/abmm)
+- [Backtests](/mechanism/backtests)

@@ -1,0 +1,38 @@
+# Layer 2 — LS-LMSR AMM
+
+Layer 2 is a Liquidity-Sensitive Logarithmic Market Scoring Rule (LS-LMSR) event contract deployed on Base Sepolia. Markets are USDC-denominated, ABMM-seeded, permissionless to trade.
+
+<ContractAddress
+  label="LSLMSR V3"
+  chain="base-sepolia"
+  address="0xb7Bd56113438961202EcFF985E7Cb2B9F2442475"
+/>
+
+<ContractAddress
+  label="USDC (Circle, Base Sepolia)"
+  chain="base-sepolia"
+  address="0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+/>
+
+## Why LS-LMSR over a CFMM
+
+Constant-function market makers (Uniswap-class CFMMs) work for assets with two-sided order flow and roughly known fundamental value. Event contracts have neither property: flow is one-sided until resolution approaches, and the fundamental value is precisely what the market is supposed to discover. A CFMM in this setting either burns through LP capital via adverse selection (Loss-versus-Rebalancing in Milionis et al. 2022) or quotes uselessly wide spreads.
+
+LS-LMSR resolves this by making the liquidity parameter `b` a function of cumulative quantity. The market starts thin (low `b`, prices respond strongly to small trades — rewards early traders for moving consensus) and deepens as activity accumulates (high `b`, later trades move prices less — protects against late-stage manipulation).
+
+## ABMM seeding
+
+The Automated Bioactivity Market Maker (ABMM) seeds each market with an initial position derived from a confidence-weighted prior. The ABMM retreats as credentialed trading volume accumulates — its influence decays exponentially with cumulative LDI.
+
+This is the central distinctive mechanism in the system. Derivation, justification, and the open theoretical question on distortion bounds are documented in [Mechanism Design → Retreat Function](/mechanism/retreat-function).
+
+## Live markets
+
+<LiveMarketCard />
+
+## See also
+
+- [LS-LMSR derivation](/layer-2/ls-lmsr)
+- [ABMM seeding](/layer-2/abmm)
+- [Layer 2 deployment coordinates](/layer-2/deployment)
+- [Live Markets ↗](/markets)

@@ -1,0 +1,42 @@
+# Regulatory Split — SEC vs CFTC
+
+The dual-layer architecture's separation maps cleanly onto the existing US jurisdictional split between the SEC (securities) and the CFTC (event contracts and derivatives). This is not a regulatory-arbitrage design — both layers are designed to operate *within* their respective frameworks, not around them.
+
+## Layer 1 — SEC perimeter
+
+The SPV's membership interests are securities. The offering is structured as Reg D 506(c) (private offering, accredited investors only, general solicitation permitted). The ERC-3643 compliance module enforces the relevant transfer restrictions on-chain:
+
+- **Accreditation gating** — only wallets with verified accredited-investor claims can hold or receive the token.
+- **Lock-up enforcement** — Rule 144 holding periods are checked on every transfer (typically 6 months for Reg D 506(c) issuers that are reporting companies, 12 months otherwise).
+- **Jurisdiction restrictions** — Reg S compliance for non-US holders is enforced via claim-based jurisdiction tags.
+
+This is the same regulatory regime under which Securitize tokenizes BlackRock's BUIDL fund and KKR's tokenized PE offerings. The architecture inherits the infrastructure and the regulatory clarity that comes with it.
+
+## Layer 2 — CFTC perimeter
+
+The Layer 2 LS-LMSR market is an event contract referencing a public outcome. Under the CFTC's framework as recently clarified by the Kalshi line of guidance and litigation, event contracts that:
+
+- Reference a publicly-observable, factually-determinable outcome
+- Are not games-of-chance or pure speculation absent any economic-hedging utility
+- Are operated by a registered designated contract market (DCM) or cleared on a registered swap execution facility (SEF)
+
+are within the CFTC's permissible product set. The architecture is designed to be hostable on a DCM (e.g., Kalshi's infrastructure) or to operate as an unregistered CFTC-curious instrument in jurisdictions where event contracts on FDA outcomes are permitted.
+
+The key architectural property: the Layer 2 contract makes no representation about the Layer 1 SPV's regulatory status. It references the *publicly-observable* outcome event (FDA decision, Phase 2 readout, etc.) — not the SPV's internal cash flow. This is the structural reason Layer 2 can be permissionless: it is not trading on private information about the SPV.
+
+## Why the split must be at the layer boundary
+
+A reader might ask: why not just deploy the LS-LMSR market on Ethereum mainnet too, or alternatively just deploy the SPV on Base? Two reasons the split is forced:
+
+1. **Compliance perimeter.** ERC-3643's compliance module enforces transfer restrictions on the *token contract*. A single token cannot be both identity-gated for one set of holders and freely tradable for another. Either the SPV is permissioned (kills permissionless price discovery) or the market is permissionless (kills compliance enforcement). The split lets each layer satisfy its own constraints.
+
+2. **Settlement asset.** Layer 1 cash flows in fiat (or in deposit tokens like JPMD in a future institutional deployment). Layer 2 settles in USDC. Forcing both to use the same settlement asset would either subordinate the SPV's institutional counterparties to crypto-native rails (unworkable for traditional pharma-royalty counterparties) or subordinate the prediction market to fiat rails (unworkable for permissionless trading).
+
+The CCTP bridge is what makes the dual-asset settlement *coherent* — capital can move between the layers in native USDC without introducing wrapped-bridge risk. See [CCTP](/cctp).
+
+## See also
+
+- [Architecture overview](/architecture)
+- [Settlement Stack](/architecture/settlement-stack)
+- [Layer 1](/layer-1)
+- [Layer 2](/layer-2)

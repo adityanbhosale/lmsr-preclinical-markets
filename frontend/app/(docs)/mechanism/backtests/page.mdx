@@ -1,0 +1,49 @@
+# Retrospective Backtests
+
+The mechanism was validated retrospectively against four programs with known clinical-development outcomes. The four selected to span the relevant decision space: three approved (sotorasib, adagrasib, vepdegestrant), one terminated (BI-1701963).
+
+## Methodology
+
+For each program, the simulation:
+
+1. Seeded the ABMM at the time of the relevant pre-readout decision point using only literature available *prior* to that point (no lookahead).
+2. Simulated credentialed trade flow using historical specialty-pharma analyst reports as the signal source.
+3. Compared the resulting market price trajectory against the actual outcome at resolution.
+
+Brier score is the canonical evaluation metric: lower is better, and a calibrated prediction at p* = 1 (correct positive call) has Brier score 0; at p* = 0 (correct negative call) Brier score is also 0; an uninformative 50/50 prior has Brier score 0.25.
+
+## Results
+
+| Program | True outcome | Final price (YES) | Brier score |
+|---|---|---|---|
+| Sotorasib | Approved | ~0.83 | 0.029 |
+| Adagrasib | Approved | ~0.71 | 0.084 |
+| Vepdegestrant | Approved | ~0.66 | 0.116 |
+| BI-1701963 | Terminated | ~0.04 | 0.002 |
+
+**Mean Brier score: 0.058.** The naive ABMM-only baseline (no credentialed trading, just the seeded prior held constant) scores 0.279 across the same four programs — the credentialed-flow + retreat mechanism delivers a 0.221 mean improvement.
+
+## What the BI-1701963 case demonstrates
+
+The terminated case is the most architecturally important. BI-1701963 was a pan-KRAS SOS1 inhibitor that Boehringer Ingelheim discontinued in early development. The seeded prior (eff_conf ≈ 0.45 from confidence + literature blend) was *higher* than the eventual outcome warranted — the ABMM was wrong at t = 0.
+
+The credentialed-flow + retreat mechanism corrects this. As specialty-pharma analysts began publishing skeptical reports through 2024, simulated credentialed flow drove the market price downward. By the time of the actual termination announcement, the market was at ~0.12 YES. By the resolution event itself, ~0.04.
+
+This is the property that matters for Layer 2's value proposition: the market does not lock in the ABMM's prior. It corrects it, and corrects it *more* aggressively when the prior is wrong (because credentialed flow is then trading against a stale seeded position). The retreat function is the structural mechanism by which this correction occurs.
+
+## Reproducibility
+
+The full backtest harness, signal-extraction scripts, and per-trade simulation logs are in the `notebooks/` directory of the repository. Running:
+
+```bash
+cd notebooks
+jupyter notebook backtest_demo.ipynb
+```
+
+reproduces the table above end-to-end in approximately 2 minutes.
+
+## See also
+
+- [Mechanism overview](/mechanism)
+- [ABMM seeding](/layer-2/abmm)
+- [Retreat function](/mechanism/retreat-function)

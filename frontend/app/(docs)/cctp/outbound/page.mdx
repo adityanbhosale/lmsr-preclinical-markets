@@ -1,0 +1,53 @@
+# Outbound Leg — Sepolia → Base Sepolia
+
+The outbound CCTP leg moves USDC from Ethereum Sepolia (where the Layer 1 SPV distributes claim-redemption proceeds) to Base Sepolia (where the Layer 2 LS-LMSR market is deployed).
+
+## Sequence
+
+1. **Burn on Sepolia.** Caller invokes `depositForBurn(amount, destinationDomain, mintRecipient, USDC)` on the Sepolia TokenMessenger. This burns USDC on Sepolia and emits a `MessageSent(bytes message)` event from the MessageTransmitter.
+
+2. **Attestation poll.** A Node.js poller (`scripts/cctp_poll.js`, ethers v6) extracts the `message` bytes from the burn transaction's logs, computes the keccak256 message hash, and polls Circle's testnet attestation API at `https://iris-api-sandbox.circle.com/attestations/{messageHash}` every 30 seconds until status is `complete`.
+
+3. **Wait for Ethereum finality.** ~15 minutes on Sepolia (matches mainnet finality). Circle will not issue an attestation until the burn transaction is final.
+
+4. **Mint on Base Sepolia.** Caller invokes `receiveMessage(message, attestation)` on the Base Sepolia MessageTransmitter. The contract verifies Circle's signature, decodes the message, and mints fresh USDC to the recipient address on Base Sepolia.
+
+5. **Approve and trade.** The freshly minted USDC is approved to the LSLMSR contract and consumed by a `trade(direction, shares)` call against the live market.
+
+## Foundry scripts
+
+The outbound flow is implemented as four small Foundry scripts plus the Node poller:
+
+```
+contracts/script/cctp/
+├── CctpBurn.s.sol         # step 1: burn on Sepolia
+├── CctpMintAndTrade.s.sol # step 4-5: mint on Base + trade in single tx
+└── CctpReturnBurn.s.sol   # (return leg)
+└── CctpFinalMint.s.sol    # (return leg)
+
+scripts/
+└── cctp_poll.js           # step 2-3: attestation polling
+```
+
+Running the full outbound leg manually:
+
+```bash
+# Step 1: burn 10 USDC on Sepolia
+source .env
+forge script script/cctp/CctpBurn.s.sol --rpc-url sepolia --broadcast
+
+# Step 2: poll for attestation (record the burn tx hash from step 1 output)
+node scripts/cctp_poll.js <burn_tx_hash> sepolia
+
+# Step 3: 15-minute wait happens inside the poller
+
+# Step 4-5: mint and trade in a single transaction on Base Sepolia
+export CCTP_MESSAGE=$(cat .cctp-message)
+export CCTP_ATTESTATION=$(cat .cctp-attestation)
+forge script script/cctp/CctpMintAndTrade.s.sol --rpc-url base-sepolia --broadcast
+```
+
+## See also
+
+- [Return leg](/cctp/return)
+- [CCTP overview](/cctp)

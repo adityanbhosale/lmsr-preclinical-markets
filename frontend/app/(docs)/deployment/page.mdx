@@ -1,0 +1,73 @@
+# Deployment Coordinates
+
+All contracts are deployed and verified on testnet. Anyone with testnet funds can reproduce the full demo flow end-to-end in ~30 minutes of active time.
+
+## Layer 1 — Ethereum Sepolia
+
+ERC-3643 SPV holding the legal claim. Eight contracts deployed and Etherscan-verified. Built on Tokeny T-REX reference. **27/27 Foundry tests passing.**
+
+<ContractAddress
+  label="MilestoneRegistry"
+  chain="sepolia"
+  address="0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D"
+/>
+
+<ContractAddress
+  label="IdentityRegistry"
+  chain="sepolia"
+  address="0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B"
+/>
+
+The four MilestoneTokens (sotorasib, adagrasib, vepdegestrant, BI-1701963) are spawned by the registry constructor. Addresses surfaced in the deploy script logs.
+
+## Layer 2 — Base Sepolia
+
+LS-LMSR event contract, USDC-denominated, ABMM-seeded.
+
+<ContractAddress
+  label="LSLMSR V3"
+  chain="base-sepolia"
+  address="0xb7Bd56113438961202EcFF985E7Cb2B9F2442475"
+/>
+
+<ContractAddress
+  label="USDC (Circle, Base Sepolia)"
+  chain="base-sepolia"
+  address="0x036CbD53842c5426634e7929541eC2318f3dCF7e"
+/>
+
+## CCTP — Sepolia ↔ Base Sepolia
+
+Native Circle CCTP, no wrapped bridge. Round-trip operationally proven.
+
+<ContractAddress
+  label="MessageTransmitter (Sepolia)"
+  chain="sepolia"
+  address="0x7865fAfC2db2093669d92c0F33AeEF291086BEFD"
+/>
+
+<ContractAddress
+  label="USDC (Sepolia)"
+  chain="sepolia"
+  address="0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238"
+/>
+
+## Reproducibility
+
+```bash
+git clone https://github.com/adityanbhosale/lmsr-preclinical-markets
+cd lmsr-preclinical-markets/contracts
+forge install
+forge test                          # 27/27 passing on Layer 1
+forge script script/DeployLayer1.s.sol:DeployLayer1 --rpc-url sepolia
+```
+
+Frontend:
+
+```bash
+cd ../frontend
+npm install
+npm run dev                         # localhost:3000
+```
+
+CCTP demo (full Sepolia → Base → trade → claim → return round-trip) is documented in [`docs/cctp-demo.md`](https://github.com/adityanbhosale/lmsr-preclinical-markets/blob/main/docs/cctp-demo.md).

@@ -1,12 +1,21 @@
+const createMDX = require('@next/mdx');
+
+const withMDX = createMDX({
+  extension: /\.mdx?$/,
+  options: {
+    remarkPlugins: [],
+    rehypePlugins: [],
+  },
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  pageExtensions: ['js', 'jsx', 'ts', 'tsx', 'md', 'mdx'],
   webpack: (config) => {
-    // Suppress warnings about optional Node.js-only deps (pino-pretty, lokijs, encoding)
-    // that wagmi / walletconnect pull in but never actually use in the browser.
     config.externals.push('pino-pretty', 'lokijs', 'encoding');
     return config;
   },
 };
 
-module.exports = nextConfig;
+module.exports = withMDX(nextConfig);

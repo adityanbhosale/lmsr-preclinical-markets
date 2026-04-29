@@ -1,0 +1,46 @@
+# Layer 1 — ERC-3643 SPV
+
+Layer 1 holds the legal claim. It is an ERC-3643 (T-REX) permissioned security token representing fractional ownership of the SPV that holds the underlying milestone payment right. Eight contracts deployed and Etherscan-verified on Ethereum Sepolia. **27/27 Foundry tests passing.**
+
+## What lives here
+
+The SPV operating agreement establishes the on-chain token register as the definitive record of membership interests. Four contracts implement that register; four MilestoneToken instances are spawned by the registry constructor (one per backtest program: sotorasib, adagrasib, vepdegestrant, BI-1701963).
+
+<ContractAddress
+  label="MilestoneRegistry"
+  chain="sepolia"
+  address="0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D"
+/>
+
+<ContractAddress
+  label="IdentityRegistry"
+  chain="sepolia"
+  address="0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B"
+/>
+
+## Why ERC-3643 over ERC-20
+
+A fungible ERC-20 token cannot satisfy Reg D 506(c) transfer restrictions on-chain. The compliance logic must live in the token contract itself, not in an off-chain middleware layer. ERC-3643 builds this in via four interlocking modules:
+
+- **Identity Registry** — maps wallet addresses to verified identity claims (accredited investor status, jurisdiction, sanctions screening).
+- **Compliance Module** — checks the registry on every transfer; enforces lock-up periods and jurisdiction restrictions.
+- **Token Contract** — the asset token, with transfer hooks calling the compliance module before any balance change.
+- **Claims Issuer** — the trusted entity (SPV administrator or third-party KYC provider) that signs identity attestations.
+
+This is the same standard used by Securitize for BlackRock's BUIDL fund and KKR's tokenized private equity offerings. The implementation here uses Tokeny's open-source T-REX reference implementation directly — not a custom rewrite.
+
+## Modular permissioning
+
+The permissioning architecture is deliberately modular: venue-level access control (who can participate in the prediction market) is separated from asset-level transfer restrictions (who can hold the SPV token). The two layers may operate under different regulatory regimes and have different liquidity requirements.
+
+- **Venue-level permissioning** is enforced at the Layer 2 prediction market on Base.
+- **Asset-level permissioning** is enforced by the ERC-3643 compliance module on Ethereum.
+
+A retail wallet can hold and trade Layer 2 outcome shares without ever being whitelisted on Layer 1. An accredited investor can hold the Layer 1 SPV token without ever interacting with Layer 2. The two memberships are uncoupled.
+
+## See also
+
+- [ERC-3643 / T-REX implementation](/layer-1/erc-3643)
+- [Milestone Tokens](/layer-1/milestone-tokens)
+- [Layer 1 deployment coordinates](/layer-1/deployment)
+- [Architecture overview](/architecture)

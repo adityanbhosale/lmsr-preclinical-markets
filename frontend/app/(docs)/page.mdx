@@ -1,0 +1,73 @@
+import Link from 'next/link';
+
+# Dual-Layer Liquidity Infrastructure for Tokenized Biotech Milestones
+
+A working architecture for event-triggered real-world assets — the category that single-layer tokenization platforms (BUIDL, Securitize, Ondo, JPMD on the deposit-token side) cannot address. The asset class is structurally illiquid: contingent FDA outcomes, binary cash flows, no continuous price-discovery surface.
+
+<div className="not-prose my-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
+  <Link
+    href="/markets"
+    className="group flex flex-col justify-between rounded-lg border border-neutral-900 bg-neutral-900 text-white px-5 py-4 transition-all hover:bg-black hover:border-black"
+  >
+    <div className="flex items-baseline justify-between">
+      <span className="text-xs uppercase tracking-wider text-neutral-400">
+        Live testnet
+      </span>
+      <span className="text-xs text-neutral-500 group-hover:text-neutral-300 transition-colors">
+        Base Sepolia
+      </span>
+    </div>
+    <div className="mt-3">
+      <div className="text-base font-semibold">
+        Trade four live markets →
+      </div>
+      <div className="text-sm text-neutral-400 mt-0.5">
+        Connect a wallet, take a position, settle in USDC
+      </div>
+    </div>
+  </Link>
+
+  <a
+    href="https://github.com/adityanbhosale/lmsr-preclinical-markets"
+    target="_blank"
+    rel="noopener noreferrer"
+    className="group flex flex-col justify-between rounded-lg border border-neutral-200 px-5 py-4 transition-all hover:border-neutral-400 hover:bg-neutral-50"
+  >
+    <div className="flex items-baseline justify-between">
+      <span className="text-xs uppercase tracking-wider text-neutral-500">
+        Source
+      </span>
+      <span className="text-xs text-neutral-400 group-hover:text-neutral-600 transition-colors">
+        Foundry · Next.js
+      </span>
+    </div>
+    <div className="mt-3">
+      <div className="text-base font-semibold text-neutral-900">
+        GitHub repository ↗
+      </div>
+      <div className="text-sm text-neutral-600 mt-0.5">
+        Layer 1, Layer 2, CCTP, frontend — all four reproducible
+      </div>
+    </div>
+  </a>
+</div>
+
+## The architectural claim
+
+Single-layer tokenization works for yield-bearing RWAs because the asset itself produces the cash flow being tokenized. Event-triggered RWAs break this pattern — the cash flow exists only at resolution, and prior to resolution the only meaningful market activity is **probability discovery**, not yield distribution. A single-layer design cannot host both a regulated security and a continuous prediction market on its outcome under the same compliance perimeter.
+
+The dual-layer split:
+
+- **Layer 1 (Ethereum mainnet / Sepolia testnet):** ERC-3643 SPV holding the legal claim. Permissioned, identity-gated, transfer-restricted. Behaves like Securitize-class infrastructure.
+- **Layer 2 (Base / Base Sepolia):** LS-LMSR event contract referencing the public outcome. Permissionless, USDC-settled, continuously priced.
+- **Bridge:** Circle CCTP — native USDC across the layer boundary, no wrapped bridge, no new institutional counterparty risk.
+
+## Live testnet
+
+Four markets currently live on Base Sepolia. Round-trip CCTP (Sepolia → Base → trade → claim → return) operationally proven.
+
+## Read order
+
+If you have ten minutes: [Architecture](/architecture) → [Live Markets](/markets) → [Deployment Coordinates](/deployment).
+
+If you have a working knowledge of ERC-3643 and LMSR-class AMMs and want the distinctive mechanism work: [LS-LMSR derivation](/mechanism) → [ABMM retreat function](/mechanism/retreat-function) → [Backtests](/mechanism/backtests).

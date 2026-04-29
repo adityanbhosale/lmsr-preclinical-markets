@@ -1,0 +1,56 @@
+# ERC-3643 / T-REX
+
+ERC-3643 (formally: Token for Regulated EXchanges, "T-REX") is the EIP that standardizes on-chain compliance for security tokens. Rather than ad-hoc wrapping or off-chain middleware, the compliance logic lives in the token contract itself.
+
+## The four-contract architecture
+
+T-REX decomposes a permissioned token into four specialized contracts:
+
+```
+                 ┌─────────────────────┐
+                 │   Token Contract    │  ← ERC-3643 implementation
+                 │   (transfer hooks)  │
+                 └──────────┬──────────┘
+                            │
+                ┌───────────┴───────────┐
+                ▼                       ▼
+     ┌────────────────────┐   ┌────────────────────┐
+     │ Identity Registry  │   │ Compliance Module  │
+     │ wallet → claims    │   │ transfer rules     │
+     └────────┬───────────┘   └────────────────────┘
+              │
+              ▼
+     ┌────────────────────┐
+     │  Claim Issuer      │  ← SPV admin or 3rd-party KYC provider
+     │  (attestations)    │
+     └────────────────────┘
+```
+
+On every transfer call, the Token Contract:
+
+1. Queries the Identity Registry for the recipient's claims
+2. Asks the Compliance Module whether those claims satisfy the transfer rules
+3. Reverts if not, executes if so
+
+This means every on-chain transfer is *automatically* gated by Reg D 506(c) accreditation, jurisdiction, and lock-up rules. There is no off-chain check that can be bypassed.
+
+## Why use the T-REX reference implementation
+
+The contracts in `contracts/src/layer1/` extend Tokeny's open-source T-REX reference implementation directly. This is the same codebase Securitize uses for BlackRock's BUIDL fund and KKR's tokenized private equity offerings. Three reasons it matters:
+
+1. **Audited.** T-REX has been through formal audits by Hacken, Kaspersky, and Resonance. A custom rewrite forfeits that assurance.
+2. **Compatible.** Any wallet, custodian, or compliance provider that has worked with Securitize will recognize the interface immediately. ERC-3643 is the de facto standard.
+3. **Extensible.** The compliance module is a separate contract, so additional rules (e.g., milestone-specific lock-ups, jurisdiction whitelists) can be added without redeploying the token.
+
+## Project-specific extensions
+
+Two extensions to the base T-REX implementation are deployed here:
+
+- **MilestoneToken** — extends `Token.sol` with metadata fields for the underlying program (drug name, milestone description, resolution target date, claim ID).
+- **MilestoneRegistry** — a factory contract that spawns MilestoneToken instances in its constructor, ensuring that all Milestone Tokens share a single Identity Registry and Compliance Module instance. This makes whitelisting once → holding any milestone token coherent at the SPV level.
+
+## See also
+
+- [Milestone Tokens](/layer-1/milestone-tokens)
+- [Layer 1 deployment](/layer-1/deployment)
+- [Tokeny T-REX repository](https://github.com/TokenySolutions/T-REX)

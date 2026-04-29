@@ -1,0 +1,32 @@
+# Dual-Layer Architecture
+
+The architecture splits two functions that single-layer tokenization platforms collapse into one contract: the **regulated security** holding the legal claim, and the **price-discovery instrument** referencing its outcome.
+
+<ArchitectureDiagram />
+
+## Why split
+
+Three reasons the layers are functionally distinct and cannot be reconciled within a single token:
+
+1. **Regulatory regime.** The Layer 1 token is a security under the Securities Act (offering exemption: Reg D 506(c) for the SPV's membership interests). The Layer 2 contract is an event contract — closer to a CFTC-supervised instrument than a security. ERC-3643 enforces transfer restrictions on Layer 1; permissionless trading is the entire point of Layer 2.
+
+2. **Liquidity profile.** Layer 1 is structurally illiquid by design — Reg D 506(c) imposes a 6-12 month lock-up, and the secondary market for membership interests is sparse even after lock-up expires. Layer 2 needs continuous price discovery from day one, which is the opposite property.
+
+3. **Settlement asset.** Layer 1 cash flows in fiat (or in deposit tokens like JPMD in a future institutional deployment). Layer 2 settles in USDC — appropriate for the venue, inappropriate for the underlying.
+
+Forcing both into a single contract requires either (a) sacrificing Layer 2's permissionless trading to satisfy Layer 1's transfer restrictions — which destroys price discovery — or (b) sacrificing Layer 1's security-status compliance to permit Layer 2's open trading — which makes the architecture unviable for institutional counterparties.
+
+## What each layer owns
+
+**Layer 1 owns:** legal title, SPV operating agreement, identity registry, claim issuer attestations, milestone payment receipt logic, lock-up enforcement, distribution to membership holders.
+
+**Layer 2 owns:** outcome share issuance, LS-LMSR pricing, ABMM seeding, USDC settlement on resolution, public market state.
+
+**Neither layer owns:** the off-chain trigger event itself. Resolution is delegated to an oracle stub in the testnet implementation; production deployment would use a credentialed-DSMB oracle design (see [Mechanism Design](/mechanism)).
+
+## See also
+
+- [Layer 1 — ERC-3643 SPV](/layer-1)
+- [Layer 2 — LS-LMSR AMM](/layer-2)
+- [CCTP Bridge](/cctp)
+- [Regulatory Split (SEC vs CFTC)](/architecture/regulatory-split)

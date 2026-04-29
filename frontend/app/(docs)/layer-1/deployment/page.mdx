@@ -1,0 +1,38 @@
+# Layer 1 Deployment Coordinates
+
+All Layer 1 contracts deployed and verified on Ethereum Sepolia. Built and deployed via Foundry. Test suite: 27/27 passing on `test/Layer1.t.sol`.
+
+## Core registry contracts
+
+<ContractAddress
+  label="MilestoneRegistry"
+  chain="sepolia"
+  address="0x1488cB83Dc15E677FFd2b5C1010a56a0C7cCa14D"
+/>
+
+<ContractAddress
+  label="IdentityRegistry"
+  chain="sepolia"
+  address="0x4f74e2AFDfc46dd3C072EAC5172eC87BE1F8d29B"
+/>
+
+The ClaimTopicsRegistry and Compliance module are deployed within the same broadcast transaction; their addresses are surfaced in the deploy script logs but omitted here to keep the table focused on the contracts a reader would interact with directly.
+
+## Reproducing the deployment
+
+```bash
+git clone https://github.com/adityanbhosale/lmsr-preclinical-markets
+cd lmsr-preclinical-markets/contracts
+forge install
+forge test -vv --match-path test/Layer1.t.sol      # 27/27 passing
+source .env
+forge script script/DeployLayer1.s.sol:DeployLayer1 --rpc-url sepolia
+```
+
+The dry-run uses ~6.75M gas total (≈0.00004 ETH at typical Sepolia prices). Broadcasting requires `--broadcast --verify -vvvv` and ~0.05 ETH headroom on the deployer wallet.
+
+## See also
+
+- [All deployment coordinates](/deployment)
+- [ERC-3643 / T-REX](/layer-1/erc-3643)
+- [Repository](https://github.com/adityanbhosale/lmsr-preclinical-markets)
