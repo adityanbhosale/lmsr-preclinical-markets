@@ -67,6 +67,7 @@ const NAV: NavItem[] = [
     ],
   },
   { title: 'Deployment Coordinates', href: '/deployment' },
+  { title: 'Roadmap', href: '/roadmap'}
 ];
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {

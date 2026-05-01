@@ -1,0 +1,57 @@
+# Roadmap
+
+The architecture is operationally proven on testnet. This page lays out what's between the current implementation and a production-grade institutional deployment, and what's theoretically unfinished.
+
+The list is intentionally honest about gaps — each item is something a serious counterparty would need addressed before institutional capital deployed against the architecture, not a list of nice-to-haves.
+
+## Production-readiness gap
+
+Five components stand between the current testnet and a mainnet institutional deployment.
+
+**Outcome resolver.** Resolution is currently delegated to an admin-controlled stub on Layer 2 — a single key calls `resolve(outcome)`. Production deployment requires a credentialed-DSMB oracle with multi-party attestation: a small set of clinical-domain experts whose collective signed attestation triggers resolution, with a fallback dispute window. The architectural primitive is the same as Layer 1's Identity Registry — claim-based attestation — but the claim is now "this DSMB member signed off on this outcome" rather than "this wallet is accredited." Engineering scope: ~3-4 weeks.
+
+**Settlement asset on Layer 2.** Currently USDC on Base Sepolia, which is the right testnet choice. A production institutional deployment would substitute a deposit-token-class asset (JPMD on Base, or analog) for the same architectural reasons that drove USDC on testnet — regulated issuer, native to destination chain, no wrapped-bridge counterparty risk. The dual-layer split is asset-agnostic at the settlement level; this is a deployment configuration change, not an architectural rewrite.
+
+**Compliance module.** Currently uses Tokeny's open-source T-REX reference implementation directly. Production deployment requires an auditor-verified instance with formally validated claim issuer governance — specifically, multi-sig control of the claim issuer key, plus a formal process for adding/revoking accreditation claims. Tokeny's T-REX has been audited by Hacken, Kaspersky, and Resonance, but each issuer's compliance module deployment requires its own audit pass.
+
+**Frontend production polish.** The trade UI at `/markets` is dev-tier. Production needs proper transaction simulation, gas estimation, error handling for failed CCTP attestations (the 15-minute Sepolia finality window is not currently surfaced cleanly to users), and a saner UX for the cross-chain capital movement. Engineering scope: ~2 weeks.
+
+**Production CCTP attestation polling.** Currently a manual Node.js script (`scripts/cctp_poll.js`) for the demo. Production needs a hosted polling service that automatically retrieves attestations once Sepolia finality is reached and surfaces them to users (or executes the receive-side mint automatically). Engineering scope: ~1 week.
+
+## Theoretical work outstanding
+
+The mechanism design for Layer 2 is implementable and empirically validated against four backtest programs ([Backtests](/mechanism/backtests) — mean Brier 0.058 vs. 0.279 for the seeded-prior-only baseline). What remains theoretically unfinished is the formal distortion bound.
+
+The retreat function w(t) = exp(−log(2)/0.35 · LDI_credentialed) is justified by structural analogy to active-block-producer mechanism design (Bahrani, Garimidi & Roughgarden 2023). The open question: is the bound `w(t) · q_abmm ≤ δ(ε, α, p*)` derivable from Theorem 3.4 of that paper, and does the bound hold throughout the retreat trajectory rather than only asymptotically?
+
+Empirical evidence from the four backtests suggests the bound holds — the seeded prior never produces market distortion exceeding the static IC distortion at t = 0. A formal proof would extend Theorem 3.4 to handle the time-varying weight w(t) rather than the static IC condition the original paper analyzes. This is the most substantive piece of unfinished theoretical work in the architecture.
+
+## Multi-market expansion
+
+The four backtest programs (sotorasib, adagrasib, vepdegestrant, BI-1701963) are addressed in the architecture and frontend. Concrete contract-side work outstanding:
+
+Deploy LSLMSR V3 instances for adagrasib, vepdegestrant, and BI-1701963 on Base Sepolia. The frontend (`lib/markets.ts`) already supports loading multiple markets; the gap is purely contract deployment plus address registration. Engineering scope: ~1 day per market.
+
+Beyond the four backtest programs, the architecture generalizes to any event-triggered RWA category with a publicly-observable resolution event. Other plausible early categories: clinical-trial endpoint markets at Phase 2/3 transitions, FDA approval-decision markets (PDUFA-anchored), structured product royalty rights for early-stage drug programs. Each requires (a) a cohort of credentialed signal sources for the ABMM seeding, (b) an outcome resolution mechanism appropriate to the event type, (c) an SPV structure aligned with the underlying asset's legal characteristics.
+
+## Mainnet deployment plan
+
+Layer 1 mainnet deployment requires a real Reg D 506(c) offering — accredited investor verification, subscription documents, formal compliance review. The on-chain components (ERC-3643 contracts, identity registry, milestone tokens) are deployment-ready; the off-chain legal and regulatory infrastructure is not yet built.
+
+Layer 2 mainnet deployment is technically simpler — the LSLMSR contracts and ABMM seeding logic deploy cleanly to Base mainnet — but requires the production CCTP polling service and credentialed-DSMB oracle described above before it would be operationally complete.
+
+The realistic mainnet deployment path: production-grade Layer 2 first (event contracts referencing publicly-observable outcomes, USDC-settled, no Reg D dependency), Layer 1 mainnet after the SPV structure and offering documents are formalized.
+
+## Integration of credentialed traders
+
+The current testnet implementation uses a single accreditation gate via the T-REX claim topics — a wallet either holds the "accredited investor" claim or it doesn't. Production deployment of the credentialed-trader concept requires more granular claim issuance: separate claim topics for "credentialed clinical analyst," "DSMB-affiliated researcher," "specialty pharma analyst," etc., each issued by a distinct claim issuer with appropriate attestation authority.
+
+This is the production version of the off-chain pipeline that currently feeds the ABMM's seeded prior. Architecturally, it converts the credentialed-signal mechanism from "trust the off-chain pipeline" to "verify on-chain claims." Engineering scope: ~3-4 weeks once the credential issuer set is determined.
+
+## What's specifically not in scope
+
+A few things worth naming as deliberately *not* on this roadmap:
+
+- Token issuance for the protocol itself. The architecture is fee-based at Layer 2 (LSLMSR market-maker spread captures protocol value); no token mechanic is planned.
+- Cross-chain expansion beyond Ethereum + Base. The Layer 1 / Layer 2 split is the architecture's core property; multi-L2 expansion would dilute that without obvious benefit.
+- Yield-bearing variants. The architecture is for event-triggered RWAs specifically. Yield-bearing categories are well-served by [BUIDL, Securitize, Ondo, JPMD on the deposit-token side](/) — adding a yield variant would compete with established infrastructure rather than extend the lineage.
