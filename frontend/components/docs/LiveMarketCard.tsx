@@ -6,8 +6,11 @@
  * Reads on-chain state for each market in lib/markets.ts via wagmi
  * useReadContracts (multicall) and renders a compact grid summary.
  *
- * Markets without deployed addresses (address: null) render as
- * "Pending deployment" cards rather than throwing.
+ * Compatible with the project's actual Market type:
+ *   { id, address, program, milestone, description, resolutionTarget }
+ *
+ * All Layer 2 markets live on Base Sepolia, so chainId is hardcoded
+ * here rather than read off each market entry.
  *
  * Usage in MDX:
  *   <LiveMarketCard />
@@ -16,11 +19,13 @@
 
 import Link from 'next/link';
 import { useReadContracts } from 'wagmi';
+import { baseSepolia } from 'wagmi/chains';
 import { MARKETS, type Market } from '@/lib/markets';
 import { lslmsrAbi } from '@/lib/abi/lslmsr';
 
 const REFETCH_INTERVAL_MS = 12_000;
 const ALPHA = 0.05;
+const CHAIN_ID = baseSepolia.id;
 
 function computePriceYes(qYes: bigint, qNo: bigint): number {
   const yes = Number(qYes) / 1e18;
@@ -42,26 +47,34 @@ function probabilityClass(p: number): string {
   return 'text-red-600';
 }
 
+function formatProgramName(program: string): string {
+  // sotorasib -> Sotorasib, BI-1701963 stays uppercase
+  if (program === program.toUpperCase()) return program;
+  return program.charAt(0).toUpperCase() + program.slice(1);
+}
+
 export function LiveMarketCard({ programs }: { programs?: string[] }) {
   const marketsToShow: readonly Market[] = programs
     ? MARKETS.filter((m) => programs.includes(m.program))
     : MARKETS;
 
+  // Filter to deployed markets (those with a non-null/non-empty address)
   const deployed = marketsToShow.filter(
-    (m): m is Market & { address: `0x${string}` } => m.address !== null,
+    (m): m is Market & { address: `0x${string}` } =>
+      typeof m.address === 'string' && m.address.startsWith('0x'),
   );
 
   const contracts = deployed.flatMap((m) => [
     {
       address: m.address,
       abi: lslmsrAbi,
-      chainId: m.chainId,
+      chainId: CHAIN_ID,
       functionName: 'qYes' as const,
     },
     {
       address: m.address,
       abi: lslmsrAbi,
-      chainId: m.chainId,
+      chainId: CHAIN_ID,
       functionName: 'qNo' as const,
     },
   ]);
@@ -102,7 +115,7 @@ export function LiveMarketCard({ programs }: { programs?: string[] }) {
           >
             <div className="flex items-baseline justify-between">
               <span className="text-sm font-semibold text-neutral-900">
-                {market.programDisplay}
+                {formatProgramName(market.program)}
               </span>
               <span className="text-xs uppercase tracking-wider text-neutral-500">
                 {market.resolutionTarget}
