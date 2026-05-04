@@ -67,6 +67,7 @@ const NAV: NavItem[] = [
     ],
   },
   { title: 'Deployment Coordinates', href: '/deployment' },
+  { title: 'Current Dev Tasks', href: "/current-dev-tasks"},
   { title: 'Roadmap', href: '/roadmap'}
 ];
 
