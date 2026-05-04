@@ -1,0 +1,24 @@
+# Present Workflows, Dev-tasks, Proposals
+
+A record of ideas and goals for the model.
+
+## Multi-agent simulation of Layer 2 LS-LMSR markets
+
+Agents whose trading policies are calibrated against real prediction market behavior, designed to
+(a) stress-test the ABMM retreat function;
+(b) generate convergence data on simulated event-triggered RWA markets you don't yet have human counterparties for.
+
+Risks & Limitations
+1. **Data Problem.** Training agentic policies on Polymarket / Kalshi / PredictIt (i.e. 'platforms') trading history is not obviously transferable to event-triggered biotech RWA markets.
+
+    Potential solution: embrace any mismatch and design around it. Essentially, use existing platform data to calibrate **noise-trader and retail-flow policies**, then synthesize **credentialed-analyst policies** from a structural model.
+
+2. **Fully-autonomous?** What specifically would 'autonomous' entail. Here are a few possibilities:
+    
+    a. **Rule-Based Agents** with hardcoded policies (momentum traders, mean-reversion traders, conviction-traders, or noise-traders).
+    
+    b. **Calibrated stochastic agents** whose action distributions are fit to empirical platform trading patterns.
+    
+    c. **RL-trained or LLM-driven agents** that learn or reason about the market state. Although, convergence behavior would be hard to interpret.
+
+I'll focus efforts on developing (b).
