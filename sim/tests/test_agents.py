@@ -165,8 +165,9 @@ def test_adversarial_silent_before_attack_tick():
         "adv", rng, attack_tick=100, attack_shares=50.0, attack_is_yes=True
     )
     market = _make_market()
-    state = market.snapshot()
     for t in range(100):
+        state = market.snapshot()
+        state["tick"] = t
         action = agent.decide(state)
         assert action.is_noop, f"attacked early at t={t}"
 
@@ -177,12 +178,13 @@ def test_adversarial_fires_at_attack_tick():
         "adv", rng, attack_tick=10, attack_shares=50.0, attack_is_yes=True
     )
     market = _make_market()
-    state = market.snapshot()
-    # advance to attack tick
+    # ticks 0-9: silent
     for t in range(10):
+        state = market.snapshot(); state["tick"] = t
         action = agent.decide(state)
         assert action.is_noop
-    # tick 10: attack fires
+    # tick 10: fires
+    state = market.snapshot(); state["tick"] = 10
     action = agent.decide(state)
     assert not action.is_noop
     assert action.shares == 50.0
@@ -195,9 +197,11 @@ def test_adversarial_silent_after_attack():
         "adv", rng, attack_tick=5, attack_shares=50.0, attack_is_yes=True
     )
     market = _make_market()
-    state = market.snapshot()
+    # advance through and including attack
     for t in range(20):
+        state = market.snapshot(); state["tick"] = t
         agent.decide(state)
-    # final tick should be no-op
+    # post-attack should be noop
+    state = market.snapshot(); state["tick"] = 20
     action = agent.decide(state)
     assert action.is_noop

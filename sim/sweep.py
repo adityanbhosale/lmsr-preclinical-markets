@@ -301,6 +301,7 @@ def _run_inline(
     for t in range(n_trades):
         agent = agents[int(rng.integers(0, len(agents)))]
         state = market.snapshot()
+        state["tick"] = t
         action = agent.decide(state)
 
         if not action.is_noop:
