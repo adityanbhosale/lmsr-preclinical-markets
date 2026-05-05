@@ -4,7 +4,14 @@ Currently building an agentic trading simulation to stress-test the ABMM retrat 
 
 ## Most Recent Build
 
-**Phase 2 complete (May 5, 2026).** Three agent classes implemented and
+**Phase 3 complete (May 5, 2026).** H1 and H2 baseline sweeps executed.
+H2 (1500 runs): convergence to true probability ≥97% when credentialed
+agents are ≥40% of population, median 312 ticks. H1 (2400 runs): ABMM
+retreat function effective against attacks ≤25% of seeded liquidity,
+fails at ≥75%; polynomial decay shape dominates exponential and step at
+every magnitude tested. Direction-symmetric. Full results in `sim/RESULTS.md`.
+
+**Phase 2 complete** Three agent classes implemented and
 unit-tested: credentialed (informed traders with private Gaussian signals
 around true probability), momentum (lookback-window trend-followers), and
 adversarial (single-shot attack agents for H1). Pool convergence property
