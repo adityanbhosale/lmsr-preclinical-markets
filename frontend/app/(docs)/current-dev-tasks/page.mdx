@@ -14,7 +14,7 @@ before sweep execution. Multi-class integration run (60% credentialed, 30%
 noise, 10% momentum, true_prob=0.65, 1000 trades) shows convergence within
 ~150 ticks and steady-state oscillation of ±0.04 around target.
 
-/![Day-4 milestone: convergence under mixed agent population](/day4_milestone.png)
+![Day-4 milestone: convergence under mixed agent population](/day4_milestone.png)
 
 **Phase 1** Pure-Python LS-LMSR port validated for
 price parity against the Solidity reference within 1e-9 absolute tolerance
@@ -107,7 +107,7 @@ Note that in sim/market.py, there are things to flag about the port:
 
     2. _retreat_factor has three decay shapes built in – this is on purpose. H1 will sweep over them, theoretically. If our Solidity only happens to implement one, we'll validate parity against that one and treat the others as Python-only extensions for the experiment.
 
-**Phase 2: Agent Classes & Integration
+**Phase 2: Agent Classes & Integration**
     1. CredentialedTrader – informed agent. This agent class makes the market converge in Hypothesis 2 (mixed agent composition, convergence within W trades, regardless of init. prior).
         Design notes: Each cred_trader gets a private signal s_i ~ Normal(true_prob, σ_i²). Smaller σ_i would imply more accurate signal. The trader would trade toward s_i, not toward true_prob directly. This matters because in real markets, even credentialed analysts don't know the true probability – rather based on noisy estimates. A market populated entirely by credentialed traders should converge to the average of their signals, which itself converges to true_prob as the pop. grows. Additionally, we have optionality for how the agent should size its trade. (a) Edge-proportional sizing – trade size proportional to |signal – market_price|. Bigger disagreement = bigger trade. Or, (b) Kelly-like sizing – trade size proportional to fractional edge (signal – price) / price for YES, or (price – signal) / (1 – price) for NO. Closer to how informed traders behave in true markets, but much more volatile. Since Kelly-like sizing produces more random-walk trades near the boundaries (price near 0 or 1), I'll stick to edge-proportional sizing.
 
@@ -127,3 +127,12 @@ Note that in sim/market.py, there are things to flag about the port:
 
     By the end of this block, we should have a populated market with all four agent classes running for 1,000 trades, producing a trajectory plot, with the credentialed-only test showing convergence to true probability.
 
+**Phase 3: sweep config files, run_sweep() orchestration function, run H1 and H2, document convergence metrics & plots**
+
+    1. Sweep config schema – YAML files that fully specify a sweep (parameter grids, agent populations, true probabilities, seeds).
+
+    2. run_sweep() orchestrator – reads a config, generates the cartesian product of parameters, runs each cell, persists results to Parquet.
+
+    3. Convergence & robustness metrics – analysis functions that take a run log and produce H1/H2 metrics.
+
+    4. Initial analysis notebook – load Parquet, compute metrics, generate plots.

@@ -1,0 +1,63 @@
+# H1 baseline sweep — ABMM retreat robustness under coordinated attacks
+# Hypothesis: retreat function is robust to liquidity-withdrawal attacks
+# below characterizable thresholds.
+
+name: h1_baseline
+hypothesis: H1
+
+# market parameters
+market:
+  alpha: 0.05
+  q_abmm_yes: 500.0
+  q_abmm_no: 500.0
+
+# simulation parameters
+n_trades: 1000
+n_seeds: 10
+attack_tick: 300       # fire attack after market has converged
+recovery_window: 200   # ticks to observe recovery
+
+# fixed agent population (informed-dominated baseline)
+agents:
+  total_agents: 50
+  mix: [0.6, 0.2, 0.2]   # credentialed, noise, momentum
+  credentialed:
+    sigma: 0.10
+    aggressiveness: 0.1
+    min_edge: 0.01
+  noise:
+    mean_size: 3.0
+    size_std: 1.0
+  momentum:
+    lookback: 15
+    threshold: 0.02
+    aggressiveness: 0.06
+
+# fixed market context
+true_probability: 0.65
+starting_prior: 0.50
+
+# parameter grid
+sweep:
+  abmm_tau:
+    - 0.5
+    - 1.0
+    - 1.5
+    - 2.0
+    - 2.5
+  abmm_threshold:
+    - 100.0   # retreat starts early
+    - 300.0   # retreat starts mid-run
+  decay_shape:
+    - exponential
+    - polynomial
+    - step
+  attack_magnitude_pct:
+    # attack_shares = pct * (q_abmm_yes + q_abmm_no) at attack tick
+    - 0.10
+    - 0.25
+    - 0.50
+    - 0.75
+  attack_direction:
+    - yes
+    - no

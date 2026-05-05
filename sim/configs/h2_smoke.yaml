@@ -1,0 +1,41 @@
+name: h2_smoke
+hypothesis: H2
+
+convergence:
+  epsilon: 0.03
+  k: 50
+
+market:
+  alpha: 0.05
+  q_abmm_yes: 500.0
+  q_abmm_no: 500.0
+
+abmm:
+  enabled: false
+
+n_trades: 800
+n_seeds: 2
+
+sweep:
+  agent_mix:
+    - [0.6, 0.2, 0.2]
+    - [0.2, 0.6, 0.2]
+  starting_prior:
+    - 0.30
+    - 0.70
+  true_probability:
+    - 0.50
+
+agents:
+  total_agents: 50
+  credentialed:
+    sigma: 0.10
+    aggressiveness: 0.1
+    min_edge: 0.01
+  noise:
+    mean_size: 3.0
+    size_std: 1.0
+  momentum:
+    lookback: 15
+    threshold: 0.02
+    aggressiveness: 0.06
