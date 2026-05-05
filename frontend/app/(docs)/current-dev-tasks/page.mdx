@@ -2,9 +2,9 @@
 
 A record of ideas and goals for the model.
 
-## Status
+## Most Recent Build
 
-**Phase 1 complete (May 5, 2026).** Pure-Python LS-LMSR port validated for
+**Phase 1** Pure-Python LS-LMSR port validated for
 price parity against the Solidity reference within 1e-9 absolute tolerance
 over 20 deterministic trades. ABMM retreat module implemented as a
 Python-only extension for H1 stress testing. Simulator scaffold and
@@ -41,7 +41,7 @@ Hypotheses:
 3. LS-LMSR price discovery dominates a constant-product baseline (Uniswap-style) on convergence speed for binary outcomes when one agent class has information advantage.
 
 
-##v1
+## v1
 minimum viable simulation: produce three rule-based agent classes (credentialed-conviction, noise-trader, momentum), hand-tuned policies informed by Polymarket data but not directly calibrated.
 8-12 simulated markets across diverse priors and outcome distributions, focused testing of H1 & H2. Results should be recorded as a single notebook with convergence plots, a 4-6 page writeup.
 
@@ -94,3 +94,24 @@ Note that in sim/market.py, there are things to flag about the port:
     1. the LS- extension here is parameterized by alpha and initial_subsidy. Our Solidity reference might use slightly different parameterization (some implementaitons use b0 directly, some use alpha * volume * b_min). We'll have to match ours exactly or the parity test will fail. This means adjusting b() to whatever our Solidity does.
 
     2. _retreat_factor has three decay shapes built in – this is on purpose. H1 will sweep over them, theoretically. If our Solidity only happens to implement one, we'll validate parity against that one and treat the others as Python-only extensions for the experiment.
+
+**Phase 2: Agent Classes & Integration
+    1. CredentialedTrader – informed agent. This agent class makes the market converge in Hypothesis 2 (mixed agent composition, convergence within W trades, regardless of init. prior).
+        Design notes: Each cred_trader gets a private signal s_i ~ Normal(true_prob, σ_i²). Smaller σ_i would imply more accurate signal. The trader would trade toward s_i, not toward true_prob directly. This matters because in real markets, even credentialed analysts don't know the true probability – rather based on noisy estimates. A market populated entirely by credentialed traders should converge to the average of their signals, which itself converges to true_prob as the pop. grows. Additionally, we have optionality for how the agent should size its trade. (a) Edge-proportional sizing – trade size proportional to |signal – market_price|. Bigger disagreement = bigger trade. Or, (b) Kelly-like sizing – trade size proportional to fractional edge (signal – price) / price for YES, or (price – signal) / (1 – price) for NO. Closer to how informed traders behave in true markets, but much more volatile. Since Kelly-like sizing produces more random-walk trades near the boundaries (price near 0 or 1), I'll stick to edge-proportional sizing.
+
+    2. MomentumTrader – trend follower. This agent class delays convergence in some H2 mixes and amplifies attacks in H1 (liquidity withdrawl attacks below threshold X).
+        Design notes: We'll pay attention to the lookback window. Short lookback (3-5 trades) creates noisy momentum that can flip directions rapidly. Longer lookback (50+ trades) creates slow, persistent momentum that strongly amplifies drift. For our second hypothesis, we'll choose a mid-level lookback (10-20 trades), but for our first hypothesis focused on withdrawl liquidity-shocks, I'll use longer lookbacks since it'd cause momentum traders more likely to amplify the adversarial attack – i.e. better stress test.
+
+    3. AdversarialTrader – coordinated-attack agent for H1. Implements the liquidity-withdrawl-then-push attack we're testing the exponential reatreat function against.
+        Design notes: simpler design. First phase of any Adversarial Trader accumulates a position quietly, and then at trade T, drumps aggressively in one direction to push price. The question is whether the ABMM retreat function pushes back. The interesting parameter is the attack magnitude as a fraction of total liquidity at attack time.
+
+    4. NoiseTrader (already built) – random directly, normally-distributed size.
+
+    5. Unit tests for each class.
+    
+    6. Property tests for the credentialed trader.
+    
+    7. Integration test that runs all four together and confirms the runner doesn't break.
+
+    By the end of this block, we should have a populated market with all four agent classes running for 1,000 trades, producing a trajectory plot, with the credentialed-only test showing convergence to true probability.
+
