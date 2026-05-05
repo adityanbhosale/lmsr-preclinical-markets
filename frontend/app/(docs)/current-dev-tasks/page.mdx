@@ -4,7 +4,17 @@ Currently building an agentic trading simulation to stress-test the ABMM retrat 
 
 ## Most Recent Build
 
-**Phase 3 complete (May 5, 2026).** H1 and H2 baseline sweeps executed.
+**Phase 4a complete (May 5, 2026).** Interactive L2 simulation panel
+shipped at `/simulation`. TypeScript port of LS-LMSR + ABMM retreat +
+three agent classes validated to within stochastic variance (3-seed
+test, mean 0.649 vs target 0.65). Component re-runs the simulator
+client-side on every parameter change — agent mix, true probability,
+retreat config, adversarial attack — and renders price trajectory plus
+retreat factor in real time. H1 and H2 sweep heatmaps embedded below
+the interactive panel as static evidence of the same mechanism at
+scale. Phase 4 writeup (sim/RESULTS.md) deferred.
+
+**Phase 3 complete.** H1 and H2 baseline sweeps executed.
 H2 (1500 runs): convergence to true probability ≥97% when credentialed
 agents are ≥40% of population, median 312 ticks. H1 (2400 runs): ABMM
 retreat function effective against attacks ≤25% of seeded liquidity,
