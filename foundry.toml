@@ -1,0 +1,5 @@
+[profile.default]
+src = "contracts/src"
+out = "contracts/out"
+libs = ["lib", "node_modules"]
+fs_permissions = [{ access = "read-write", path = "./sim/tests/fixtures" }]

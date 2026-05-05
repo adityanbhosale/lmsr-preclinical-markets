@@ -32,7 +32,7 @@ Hypotheses:
 3. LS-LMSR price discovery dominates a constant-product baseline (Uniswap-style) on convergence speed for binary outcomes when one agent class has information advantage.
 
 
-**v1**
+##v1
 minimum viable simulation: produce three rule-based agent classes (credentialed-conviction, noise-trader, momentum), hand-tuned policies informed by Polymarket data but not directly calibrated.
 8-12 simulated markets across diverse priors and outcome distributions, focused testing of H1 & H2. Results should be recorded as a single notebook with convergence plots, a 4-6 page writeup.
 
@@ -42,3 +42,46 @@ Use Polymarket public API + on-chain data. Polymarket's order books and trade hi
     b. binary-outcome science markets (when they exist)
     c. high-information-asymmetry markets generally
 
+**Architecture:**
+
+    1. Market environment – wraps existing LS-LMSR contracts (or a Python port for speed) to expose currect_price(), cost_of_trade(), execute_trade(agent_id, shares), and total_volume() as a clean simulation API.
+
+    2. ABMM retreat module – the function under test. Should be configurable so we can sweep retreat params (exponent, threshold, decay shape)
+
+    3. Agent base class + three agent classes – credentialed-conviction, noise-trader, momentum.
+
+    4. Simulation runner – instantiates a market, populates with agent mix, steps through trades, logs every state transition.
+
+    5. Analysis pipeline – takes the run logs, computes convergence metrics (Brier vs. true probability over time, price variance, retreat trajectory) and produces plots.
+
+Note that the simulator does not need to interface with any testnet contracts. We'll build in Python first. Calling Foundry/cast for every simulated trade would make a 10,000-trade run take too long; a Python LS-LMSR implementation runs the same simulation much faster. Since we already have the math implemented in Solidity (using PRBMath UD60x18), porting to Python with 'mpmath' or numpy.float64 wouldn't be that difficult. We'll start by validating that the Python port matches Solidity outputs on 20-30 trades, then run all simulations in Python.
+
+Since v1 of the agentic trading platform will focus on Hypotheses 1 & 2, the following requirements must be met for each:
+
+**H1**
+    adversarial agent class that withdraws liquidity in coordinated bursts
+
+    sweep over attack magnitude and timings
+
+    metric: does retreat traj. stay monotone? does final price stay within ε of true prob?
+
+    one run per (attack_magnitude • attack_timing • random seed) cell
+
+**H2**
+    no adversarial class – just the three behavioral classes
+
+    sweep over agent-mix ratios (% credentialed, % noise, % momentum) and starting priors
+
+    metric: trades-to-convergence (within ε of true prob) as a function of mix
+
+    one run per (mix_config • starting_prior • true_prob • random seed) cell
+
+Both hypotheses require the same infrastructure, just different agent populations and different sweep dimensions. We'll build the simulator agnostic to which hypothesis we're testing.
+
+
+**Phase 1: Foundations:** create a sim/ directory inside existing repo with proper structure, a pure-Python LMSR implementation that produces the same prices as the Solidity contracts (validated by a parity test), an ABMM retreat module with all parameters configurable, and a base agent class and a working simulation running that produces a price-trajectory plot end-to-end.
+
+Note that in sim/market.py, there are things to flag about the port:
+    1. the LS- extension here is parameterized by alpha and initial_subsidy. Our Solidity reference might use slightly different parameterization (some implementaitons use b0 directly, some use alpha * volume * b_min). We'll have to match ours exactly or the parity test will fail. This means adjusting b() to whatever our Solidity does.
+
+    2. _retreat_factor has three decay shapes built in – this is on purpose. H1 will sweep over them, theoretically. If our Solidity only happens to implement one, we'll validate parity against that one and treat the others as Python-only extensions for the experiment.

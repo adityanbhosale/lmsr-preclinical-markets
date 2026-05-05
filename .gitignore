@@ -18,3 +18,6 @@ contracts/.cctp-*
 
 # Node dependencies (in case any subdirectory installs them)
 **/node_modules/
+sim/venv/
+sim/**/__pycache__/
+sim/.pytest_cache/
