@@ -143,3 +143,23 @@ Note that in sim/market.py, there are things to flag about the port:
     3. Convergence & robustness metrics – analysis functions that take a run log and produce H1/H2 metrics.
 
     4. Initial analysis notebook – load Parquet, compute metrics, generate plots.
+
+
+
+
+
+## Visualizations
+
+**Layer 2 Panel:**
+
+    • Adjust agent mix sliders (%credentialied / noise / momentum)
+    • Be able to pick a starting prior & true_prob
+    • Be able to trigger liquidity shocks mid-run
+    • Watch ptice & retreat-factor curves animate in real time
+
+Realistically, this implementable as a single React component given my existing simulation code. The H1 / H2 sweep infrastructure already produced the necessary trajectory data. I'll build a UI that calls _run_inline with user-chosen parameters that render the resulting log with Recharts or similar.
+
+For now, I'll put visualization efforts for Layer 1 & the CCTP boundary function aside since they're relatively static. I will, however, create a simulation panel that reuses the existing H1 / H2 results since the data is already in Parquet + PNGs.
+
+Another interesting idea is developing a live cron-scheduled set of markets – essentially a naive version of running agents in a loop on a server and having them trade against my deployed Sepolia contracts on a schedule. Although this build would have its own set of complications, including gas costs, state management, resolution events, adversarial schedules, and creating an effective public UI.
+

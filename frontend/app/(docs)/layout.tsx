@@ -66,6 +66,15 @@ const NAV: NavItem[] = [
       { title: 'Backtests', href: '/mechanism/backtests' },
     ],
   },
+
+  {
+    title: 'Simulation',
+    children: [
+      { title: 'Interactive Mechanism', href: '/simulation' },
+      { title: 'Sweep Results (H1 + H2)', href: '/simulation#sweep-results' },
+    ],
+  },
+
   { title: 'Deployment Coordinates', href: '/deployment' },
   { title: 'Current Dev Tasks', href: "/current-dev-tasks"},
   { title: 'Roadmap', href: '/roadmap'}

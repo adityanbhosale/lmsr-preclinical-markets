@@ -1,0 +1,44 @@
+# Simulation
+
+The dual-layer mechanism is best understood by watching it move. The interactive panel
+below runs the same LS-LMSR + agent code that produced the H1/H2 sweep results — ported
+from Python to TypeScript and validated to within stochastic variance.
+
+## Interactive mechanism
+
+<InteractiveL2Sim />
+
+Adjust the agent population and watch the price converge toward `true_prob`. The dashed
+gray line is the retreat factor — it stays at 1.0 until human volume crosses the threshold,
+then decays according to the chosen shape. Fire an adversarial attack to see whether the
+ABMM retreat reverses the displacement.
+
+## Sweep results (H1 + H2)
+
+Two batched sweeps validate the interactive mechanism above against the full
+parameter space. **H2** (1,500 runs) measures convergence to true probability
+under varying agent populations; **H1** (2,400 runs) measures retreat-function
+robustness under coordinated adversarial attacks.
+
+<img
+  src="/sim/h2_heatmap_mix_prior.png"
+  alt="H2: convergence rate by credentialed share × starting prior"
+  className="w-full rounded border border-border my-4"
+/>
+
+Convergence to within ε=0.03 of true probability is ≥97% reliable when
+credentialed agents are ≥40% of the population. In that regime, median
+convergence is 312 ticks (IQR 193–482).
+
+<img
+  src="/sim/h1_recovery_by_shape.png"
+  alt="H1: median recovery fraction by decay shape and attack magnitude"
+  className="w-full rounded border border-border my-4"
+/>
+
+The retreat function reverses ~80–90% of attack displacement at 10% liquidity
+attacks, falling to ~25–50% at 50% attacks. Polynomial decay dominates
+exponential and step at every magnitude tested — a real architectural
+recommendation, not just a yes/no.
+
+*Interactive heatmap filters coming next iteration.*
