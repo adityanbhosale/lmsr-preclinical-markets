@@ -4,6 +4,16 @@ A record of ideas and goals for the model.
 
 ## Most Recent Build
 
+**Phase 2 complete (May 5, 2026).** Three agent classes implemented and
+unit-tested: credentialed (informed traders with private Gaussian signals
+around true probability), momentum (lookback-window trend-followers), and
+adversarial (single-shot attack agents for H1). Pool convergence property
+test passes — a market populated by credentialed-only traders converges to
+true probability within 0.05 over 2000 trades, validating agent calibration
+before sweep execution. Multi-class integration run (60% credentialed, 30%
+noise, 10% momentum, true_prob=0.65, 1000 trades) shows convergence within
+~150 ticks and steady-state oscillation of ±0.04 around target.
+
 **Phase 1** Pure-Python LS-LMSR port validated for
 price parity against the Solidity reference within 1e-9 absolute tolerance
 over 20 deterministic trades. ABMM retreat module implemented as a
