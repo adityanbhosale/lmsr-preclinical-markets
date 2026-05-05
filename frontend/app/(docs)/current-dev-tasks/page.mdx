@@ -32,3 +32,13 @@ Hypotheses:
 3. LS-LMSR price discovery dominates a constant-product baseline (Uniswap-style) on convergence speed for binary outcomes when one agent class has information advantage.
 
 
+**v1**
+minimum viable simulation: produce three rule-based agent classes (credentialed-conviction, noise-trader, momentum), hand-tuned policies informed by Polymarket data but not directly calibrated.
+8-12 simulated markets across diverse priors and outcome distributions, focused testing of H1 & H2. Results should be recorded as a single notebook with convergence plots, a 4-6 page writeup.
+
+**data integration**
+Use Polymarket public API + on-chain data. Polymarket's order books and trade history are partially queryable via their REST API (rate-limited, undocumented edges) and fully reconstructable from on-chain Polygon data. Their order book is on-chain via the CTF exchange contract. This data source would work well for noise-trader and retail-flow calibration. The relevant adjacencies for our purposes are as follows:
+    a. health policy markets (FDA approval predictions, drug approval timelines)
+    b. binary-outcome science markets (when they exist)
+    c. high-information-asymmetry markets generally
+
