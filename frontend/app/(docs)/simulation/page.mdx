@@ -20,6 +20,20 @@ parameter space. **H2** (1,500 runs) measures convergence to true probability
 under varying agent populations; **H1** (2,400 runs) measures retreat-function
 robustness under coordinated adversarial attacks.
 
+### H2 — convergence to true probability
+
+A representative run with a 40/40/20 credentialed/noise/momentum mix and a
+starting prior 35 percentage points away from the true probability.
+
+<img
+  src="/sim/h2_trajectory_example.png"
+  alt="H2 single-run trajectory: 40/40/20 mix, prior 0.30 → true 0.65"
+  className="w-full rounded border border-border my-4"
+/>
+
+Across 1,500 runs spanning five agent mixes, five starting priors, and three
+true probabilities, convergence rate scales sharply with credentialed share:
+
 <img
   src="/sim/h2_heatmap_mix_prior.png"
   alt="H2: convergence rate by credentialed share × starting prior"
@@ -30,6 +44,23 @@ Convergence to within ε=0.03 of true probability is ≥97% reliable when
 credentialed agents are ≥40% of the population. In that regime, median
 convergence is 312 ticks (IQR 193–482).
 
+### H1 — retreat under attack
+
+A representative run with a 25%-liquidity adversarial buy at tick 300,
+exponential retreat τ=1.5. The attack pushes price toward 1.0, retreat
+engages, and price drifts back toward `true_prob = 0.65` over the next
+500 ticks.
+
+<img
+  src="/sim/h1_trajectory_example.png"
+  alt="H1 single-run trajectory: 25% YES-attack at tick 300, exponential τ=1.5"
+  className="w-full rounded border border-border my-4"
+/>
+
+Across 2,400 runs spanning three decay shapes, four attack magnitudes,
+both attack directions, and 25 seeds, recovery degrades with magnitude
+but the decay shape matters at every level:
+
 <img
   src="/sim/h1_recovery_by_shape.png"
   alt="H1: median recovery fraction by decay shape and attack magnitude"
@@ -37,8 +68,8 @@ convergence is 312 ticks (IQR 193–482).
 />
 
 The retreat function reverses ~80–90% of attack displacement at 10% liquidity
-attacks, falling to ~25–50% at 50% attacks. Polynomial decay dominates
-exponential and step at every magnitude tested — a real architectural
+attacks, falling to ~25–50% at 50% attacks. **Polynomial decay dominates
+exponential and step at every magnitude tested** — a real architectural
 recommendation, not just a yes/no.
 
 *Interactive heatmap filters coming next iteration.*
