@@ -358,8 +358,8 @@ export function InteractiveL2Sim() {
                     fontSize: 11,
                   }}
                   labelFormatter={(t) => `Tick ${t}`}
-                  formatter={(v: number, name: string) => [
-                    v.toFixed(3),
+                  formatter={(v, name) => [
+                    typeof v === 'number' ? v.toFixed(3) : String(v),
                     name === 'priceYes' ? 'Price (YES)' : 'Retreat factor',
                   ]}
                 />
