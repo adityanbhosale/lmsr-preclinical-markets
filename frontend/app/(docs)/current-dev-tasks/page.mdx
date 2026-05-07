@@ -2,6 +2,34 @@
 
 Currently building an agentic trading simulation to stress-test the ABMM retrat & LS-LMSR market making functions.
 
+
+## Updated Thoughts on Agentic Trading Applications
+
+Standard prediction market theory assumes information asymmetry comes from differential access to informationn (i.e., Trader A has insider data on a trial, Trader B doesn't. A's trade reveals data and the market converges to truth). All canonical work assumes this structure (Hanson, Chen-Pennock).
+
+Agentic trading breaks the assumption in both directions. In theory, agents reading the same public data shouldn't produce information asymmetry, they should converge to the same prior & make the market a redundant aggregator of price signal. However, the empirical evidence from existing markets shows that even with majority public information training, prices do contain meaningful signal that beats expert forecasts. Therefore, agents reading public data are capable of producing aggregable disagreement.
+
+The primary explanation for why is that information asymmetry in an agentic regime doesn't come from access to facts – it comes from differential inference paths over the same fact-set. Different agents reading the same paper can produce different posteriors if they're applying different reasoning procedures, different priors, or different feature extractors, leading to meaningful signal. The remaining question is who would economically be incentivized to sponsor these agents & how.
+
+**Potential Sponsors:** Three potential classes of sponsors.
+
+    1. Primary-market participants looking to hedge pipeline exposure.
+
+    2. Specialty funds running calibrated agents as alpha-generation strategies.
+
+    3. Protocol-level or platform-incentivized agents.
+       
+       Most interesting application. Essentially an agentic successor to the ABMM prior. Where the ABMM seeds with a statis off-chain prior and retreats as credentialed-human volume accumulates, a protocol-sponsored agent could continuously update its prior based on new public information, providing a baseline price level that the market can they disagree with or confirm. Informational advantage is breadth (i.e. monitoring all public sources continuously) rather than depth (no single source is secret).
+
+**Aggregating Informationa Asymmetry**
+
+    1. Aggregation Depth
+
+    2. Cross-Market Consistency
+
+    3. Tail event reasoning
+
+
 ## Most Recent Build
 
 **Phase 4a complete (May 5, 2026).** Interactive L2 simulation panel
