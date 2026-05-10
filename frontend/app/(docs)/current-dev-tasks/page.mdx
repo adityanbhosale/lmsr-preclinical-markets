@@ -2,6 +2,38 @@
 
 Currently building an agentic trading simulation to stress-test the ABMM retrat & LS-LMSR market making functions.
 
+## Agentic information-edge simulation (v2)
+
+Already built includes Phases 1-3, including a pure-Python LS-LMSR + ABMM retreat module, three agent classes (credentialed, noise, momentum) plus adversarial tests for H1 (retreat-function robustness). I validated H1 to 1e-9 parity against the original Solidity implementation over 20 determinisitc trades using a tick-based simulator with uniform agent sampling.
+
+The H1 baseline consisted of ~2400 runs to test retreat function robustness. I found that polynomial decay actually performs better than exponential decay and step decay at each liquidity shock magnitude (0%, 25%, 50%, 75%). The H2 baseline consisted of ~1,500 runs to test convergence under mixed populations. I found that the convergence threshold is quite sharp at ~30% credentialed share – below that, convergence is 65-86% but at or above 40%, convergence reaches ≥ 97%.
+
+Core Research Question at the moment: In LS-LMSR event-contract markets with polynomail decay AMM retreat, how do different sources of inforamtion edge (e.g., aggregation depth, cross-market consistency, & tail-event reasoning) contribute to price discovery, and how do they interact in mixed agent populations?
+
+The goal of this model is not to be a strategy comparison between the information edge cases, since these are sources of edge operating at different levels of abstraction. Aggregatipon depth is a single-market inference quality. Tail-event reasoning is prior structure over outcome distributions. Cross-market consistency only exists in a multi-market environment (which I'll subsequently simulate). The simulation I'm proposing studies these three as different processing strategies over the same public information environment (also simulated consistently). I'll frame the simulation more generically (i.e. sector agnostic). The previous dual-layer liquidity model is one instance of LS-LMSR + retreat infra; this simulation applies to any event-contract market with mixed agent populations. Biotech and political prediction markets are both instances of the framework.
+
+The core architectural decisions I had to make were as follows:
+    1. Multi-market simulation – cross-market consistency agents require this. Markets share latent factor structure (some correlated clusters, some independent). This simulation factor adds substantial engineering cost but enable the full three-source decomposition.
+
+    2. Continuous-time signaling – signals now arrive as a marked point process (Poisson) rather than per-tick as before. This decouples information arrival from trading decisions, and enables information-flow latency as a distinct metric. However, this requires further event-driven simulation infrastructure in the build.
+
+**Foundational Systems:**
+
+    1. Continuous-time information environment. Essentially a marked point process that generates signals per market with latent factor correlation structure across markets. Each market m has leadings β_m ∈ R^k on a latent factor vector f ∈ R^k plus some idiosyncratic component: p*_m = sigmoid(β_m · f + ε_m). Some markets share strong loadings (correlated cluster); others are dominated by idiosyncratic factors (independent). The environment must integrate separate marked point processes for rare tail events – essentially signals that, when observed, dramatically shift the posterior price view toward extreme outcomes but requires structured reasoning to updated on properly.
+
+    2. Market environment. Essentially the LS-LMSR + polynomial-decay retreat, extended to handle event-driven trading at arbitrary timestamps. The retreat factor updates continuously based on accumulated human volume. Markets evolve in simulated continuous time, parallel-instantiated across the multi-market structure.
+
+    3. Agent population with four classes + noise simulation:
+
+        * Naive credentialed: observes signals on its own market with delay δ (modeling slower human reaction). Follows modal-biased Bayesian inference. Mixed reactive + low-frequency review decision policy. Baseline class which represents what a single human credentialed expert produces.
+
+        * Aggregation-depth – core
+
+        * Cross-market consistency – core
+
+        * Tail-event reasoning – core
+
+        * Noise traders: Poisson-arrival random trades at low rates. Essentially just background flow.
 
 ## Updated Thoughts on Agentic Trading Applications
 
