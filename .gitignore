@@ -22,3 +22,4 @@ sim/venv/
 sim/**/__pycache__/
 sim/.pytest_cache/
 **/.ipynb_checkpoints/
+.venv/
