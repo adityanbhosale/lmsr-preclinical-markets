@@ -1,21 +1,19 @@
 # Simulation
 
-The dual-layer mechanism is best understood by watching it move. The interactive panel
-below runs the same LS-LMSR + agent code that produced the H1/H2 sweep results — ported
+The interactive panel below runs the LS-LMSR & agent code that produced the H1/H2 sweep results — ported
 from Python to TypeScript and validated to within stochastic variance.
 
 ## Interactive mechanism
 
 <InteractiveL2Sim />
 
-Adjust the agent population and watch the price converge toward `true_prob`. The dashed
-gray line is the retreat factor — it stays at 1.0 until human volume crosses the threshold,
-then decays according to the chosen shape. Fire an adversarial attack to see whether the
+The dashed gray line is the retreat factor — it stays at 1.0 until human volume crosses the threshold,
+then decays variably based on the chosen geometry. The liquidity shock function can be used to see whether the
 ABMM retreat reverses the displacement.
 
 ## Sweep results (H1 + H2)
 
-Two batched sweeps validate the interactive mechanism above against the full
+I ran two sweeps to validate the interactive mechanism above against the full
 parameter space. **H2** (1,500 runs) measures convergence to true probability
 under varying agent populations; **H1** (2,400 runs) measures retreat-function
 robustness under coordinated adversarial attacks.
