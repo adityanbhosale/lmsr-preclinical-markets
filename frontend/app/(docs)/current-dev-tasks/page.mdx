@@ -78,11 +78,11 @@ The core architectural decisions I had to make were as follows:
 
             * polynomial decay as the default in MarketSpec (overrides ABMMConfig's 'exponential' default)
 
-            * parity strategy: existing 'test_market_parity.py' already proves LSLMSRMarket <> Solidity. Add new test proving that 'event-driven wrapper' <> 'direct LSLMSRMarket calls' is bit-exact. In combination these two proofs allows us to assume that 'event-driven path' <> Solidity transitively.
+            * parity strategy: existing 'test_market_parity.py' already proves LSLMSRMarket ↔ Solidity. Add new test proving that 'event-driven wrapper' ↔ 'direct LSLMSRMarket calls' is bit-exact. In combination these two proofs allows us to assume that 'event-driven path' ↔ Solidity transitively.
 
             This layer is essentially the 'trading floor' where markets actually exist and trades execute. It's a wrapper around the existing LSLMSRMarket that holds N independent market indexed by market_id (matching the information env's market space), registers a "trade" event handler (agents schedule TradeRequest payloads via the simulator, the handler routes each one to the right market and executes), logs every trade with full context (i.e. timestamp, market, agent, side, shares, cost, price, before/after) for later analysis, defaults retreat to polynomial decay (overriding ABMMConfig's 'exponential default').
 
-            The parity strategy does not involve reimplementing LS-LMSR. The wrapper just calls our existing 'execute_trade' function. Two new tests in TestParityWithDirectCalls run identical trade sequences via direct calls vs the event path and assert bit-exact equality on q_yes, q_no, prices, and costs. Combined with the existing 'test_market_parity.py' file (proving LSLMSRMarket <> Solidity to 1e-9), this gives the event-driven path <> Solidity transitively without drift.
+            The parity strategy does not involve reimplementing LS-LMSR. The wrapper just calls our existing 'execute_trade' function. Two new tests in TestParityWithDirectCalls run identical trade sequences via direct calls vs the event path and assert bit-exact equality on q_yes, q_no, prices, and costs. Combined with the existing 'test_market_parity.py' file (proving LSLMSRMarket ↔ Solidity to 1e-9), this gives the event-driven path ↔ Solidity transitively without drift.
 
     4. Baseline agents in continuous time – naive credentialed + noise with mixed reactive-plus-review policy. Port from existing tick-based code.
 
@@ -104,9 +104,72 @@ The core architectural decisions I had to make were as follows:
 
     5. Aggregation-depth agent class – multiple sub-types, instant observation, mixed policy.
 
+        Includes the following:
+
+            * New 'AggregationDepthAgent' class: observation_delay = 0 (instant), wider sample (observed_markets ⊇ market_ids), high-frequency review (500 vs. naive's 5000), cross-market signal updates weighted by latent factor correlation.
+
+            * Cross-market update uses discounted Bayesian update: signal on related market j with weight ρ contributes effective_value = ρ·s_j, effective_precision = ρ²·τ_signal to primary market i's posterior. for ρ = 1 (native market) this reduces to the standard update; for low ρ it's more gracefully ignored.
+
+            * Helper 'cross_weights_from_loadings()' function computes weights as cosine similarity of latent loadings – markets in same cluster get high ρ, cross-cluster gets low.
+
+            * Factory 'make_aggregation_depth_pool()' function for the "multiple sub-types" pattern from the handoff (diverse 'prior_precision' across the pool produces inter-agent disagreement).
+
+            * Refactor: extract the _consider_trade logic into a module-level helper so both NaiveCredentialed and AggregationDepth share it. pure internal refactor – public API unchanged, Task 4 tests still pass.
+
+            Essentially, this dev-tasks implements the next trader class – where naive credentialed agents only watcht their own market and react slowly, the aggregation-depth agent watches many related markets at once, sees signals instantly, and reviews more frequently. When a signal arrives on a "related" market (one in the same cluster), it updates its beliefs about its own market by a discounted amount – the most correlated the markets, the bigger the update.
+
+            The "multiple sub-types varying in evidence-weighting prior" pattern from the handoff is built via 'make_aggregation_depth_pool(n_agents...)' – instantiates a pool with log-spaced prior precisions from 0.5 (credulous) to 10.0 (skeptical). Disagreement across sub-types is the collective contribution the handoff calls out.
+
+            The 'Agent' type alias now includes all three classes: Agent = Union[NativeCredentialedAgent, NoiseTrader, AggregationDepthAgent]
+
+            For each primary market i, signal s on observed market j with weight ρ_ij:
+
+            τ_effective = signal_precision_assumed · ρ²
+            value_eff   = ρ · s
+            τ_new       = τ_old + τ_effective
+            μ_new       = (τ_old · μ_old + τ_effective · value_eff) / τ_new
+
+            For ρ = 1 (own market), it reduces to standard sequential Bayesian update; for ρ = 1, it contributes essentially nothing, and weights below 'min_cross_weight' (default 0.05) are dropped entirely so we don't pay event-loop cost for negligible updates. For ρ < 0 (anti-correlated markets like independents with random factor loading direction), it correctly flips the signal direction.
+
+            This isn't the fully rigorous Bayesian update under a latent factor model. That would require knowing σ_pop and σ_signal explicitly, and will be implemented in dev-task 7, which handles the cross-market consistency agent that maintains a joint posterior over factors rather than per-market. The discounted update as of now is a simpler one that treats related signals as noisier own-market signals. This is still defensible, though, because it matches the intuitive 'posterior pulls towards ρ·s_j' with unit prior, and it's also the proper architectural separation (aggregation-depth aggregates evidence, cross-market-consistency does Bayesian factor inference). It's essentially different agnts with different model complexities.
+
     6. Tail-event reasoning agent class – bayesian with base-rate priors.
 
+        Includes the following:
+
+            * 'TailEventReasoningAgent': prior mean at 'logit(base_rate_m) per market (not anchored at 0), uses signal.noise_std directly for precision-weighted updates (correctly weights tail signal ~6x more than routine signals). allows for instant observation with moderate frequency review.
+
+            * 'base_rates_from_truth(info_env, ...): helper agent that produces noisy estimates of p* – models "agent has historical priors with finite error". caller controls the noise level via 'noise_std'.
+
+            * Two separable advantages over naice credentialed trading: (a) informed prior (handles tail markets), & (b) correct signal weioghting via noise_std (handles tail-marked signal). tests verify each independently.
+
+            This is essentially the third trading model. Naive credentialed traders insist that "things start at 50/50 unless it sees strong evidence otherwise", and treats all signals equally. Conversely, the tail-event reasoning agent is what properly-trained Bayesian forecasters would theoretically look like:
+
+                    Starts with informed priors that reflect what they actually believe about each market (from a "base-rate library" – historical knowledge)
+
+                    Correctly weighs higher-precision signals (tail-marked, σ=0.4) ~6x more than noisier signals (routine, σ=1.0).
+
     7. Cross-market consistency agent class – joint posterior over latent factors, portfoklio-wide arbitrage. This is most complex. Use proper Bayesian updated (which is slower but more defensible) over heuristic coherence checks. Make sure to influce capital allocation constraints for agent.
+
+        Includes the following:
+
+            * joint posterior over latent factors f ∈ ℝᵏ, stored in information form (Λ, η) so each signal is an O(k²) rank-1 update – no matrix inversion until I query implied logits.
+
+            * Likelihood per signal: s_j = β_j · f + noise, so ΔΛ = τ_s · β_j β_jᵀ, Δη = τ_s · s_j · β_j. uses 'single.noise_std' directly *(correct Bayesian weighting, like tail-event).
+
+            * Implied logit per market: β_m · μ_post where μ_post = Λ⁻¹ η. this is what makes cross-market inference work: a signal on market A with shared factor loading β updates the implief belief on market B automatically through the posterior on f.
+
+            * Portfolio-wide review: scans all primary markets, sorts opportunities by |implied – market| descending, processes in that order. when budget is tight, the biggest opportunity gets capital first (aforementioned "capital allocation logic").
+
+            * Helper 'make_cross_market_agent(info_env, ...): constructs the agent using 'info_env.world.loadings_matrix' for β. this assumes the agent knows the factor structure perfectly – real-world relaxation (noisy β) is out of scope.
+
+            This is essentially the fourth and most complex trader model. Where naice credentialed trader maintains one belief per market, and aggregation-depth uses ad-hoc correlation discounts between markets, the cross-market consistency agent maintains a proper Bayesian posterior over the underlying latent factors themselves (the things that driven multiple markets together). When a signal arives on market A, the agent updates its beliefs about the underlying factors, which automatically updates its implief belief about every other market that loads on those factors. Then it scans its whole porfolio for the biggest mispricings and trades the biggest ones first.
+
+            Technical: joint posterior on f ∈ ℝᵏ in information form (Λ, η). Each signal is an O(k²) rank-1 update, meaning no matrix inversion until we query implied logits. Information form is the proper representation since it composes additively: one signal = one outer product addition. For k = 5 and hundreds of signals, this remains efficient.
+
+            The key cross-market property (test: 'test_signal_on_market_a_updates_implied_logit_for_market_b): two markets with shared loading β get jointly updated by a signal on either. Single signal value = 2.0 in market 0 with β₀=[1,0], and market 1 also has β₁=[1,0] --> both implied logits move to 1.0. This is the defensible Bayesian version of what aggregation-depth approximates with its discounted update.
+
+            As for the capital allocation logic – review path sorts opportunities by |p_implied – p_market| descending, processing in priority order. When budget is tight, the biggest gap consumes capital first – 'test_budget_limited_review_skips_smaller_opportunities' covers this gap.
 
     8. Multi-market runner – parallel markets, shared agent population
 

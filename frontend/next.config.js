@@ -1,4 +1,6 @@
 const createMDX = require('@next/mdx');
+const remarkGfm = require('remark-gfm');
+
 
 const withMDX = createMDX({
   extension: /\.mdx?$/,
