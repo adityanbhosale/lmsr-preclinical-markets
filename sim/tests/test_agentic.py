@@ -19,6 +19,7 @@ import pytest
 from sim.agentic import (
     AgentPopulation,
     AggregationDepthAgent,
+    CrossMarketConsistencyAgent,
     NaiveCredentialedAgent,
     NoiseTrader,
     TailEventReasoningAgent,
@@ -26,6 +27,7 @@ from sim.agentic import (
     base_rates_from_truth,
     cross_weights_from_loadings,
     make_aggregation_depth_pool,
+    make_cross_market_agent,
 )
 from sim.information import ClusterSpec, InformationConfig, InformationEnvironment, Signal
 from sim.market_env import MarketEnvironment, MarketSpec, TradeRequest
@@ -1178,5 +1180,392 @@ class TestTailEventIntegration:
              for r in env1.trade_log]
         b = [(r.timestamp, r.market_id, r.agent_id, r.is_yes, r.shares, r.cost)
              for r in env2.trade_log]
+        assert a == b
+        assert len(a) > 0
+
+
+# =============================================================================
+# Task 7: CrossMarketConsistencyAgent
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+
+class TestCrossMarketValidation:
+    def _base(self, **kwargs):
+        defaults = dict(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1),
+            loadings={0: np.array([1.0, 0.0]), 1: np.array([0.5, 0.5])},
+        )
+        defaults.update(kwargs)
+        return defaults
+
+    def test_requires_primary_in_observed(self):
+        with pytest.raises(ValueError, match="must be in observed_markets"):
+            CrossMarketConsistencyAgent(
+                agent_id=0, budget=100.0,
+                market_ids=(5,), observed_markets=(0, 1),
+                loadings={0: np.array([1.0]), 1: np.array([1.0])},
+            )
+
+    def test_requires_loadings_for_every_observed(self):
+        with pytest.raises(ValueError, match="loadings missing"):
+            CrossMarketConsistencyAgent(
+                agent_id=0, budget=100.0,
+                market_ids=(0,), observed_markets=(0, 1),
+                loadings={0: np.array([1.0])},  # missing 1
+            )
+
+    def test_dimension_mismatch_raises(self):
+        with pytest.raises(ValueError, match="dimension mismatch"):
+            CrossMarketConsistencyAgent(
+                agent_id=0, budget=100.0,
+                market_ids=(0,), observed_markets=(0, 1),
+                loadings={0: np.array([1.0, 0.0]), 1: np.array([1.0])},  # different k
+            )
+
+    def test_initial_state_at_prior(self):
+        a = CrossMarketConsistencyAgent(**self._base(prior_precision_scale=3.0))
+        # Λ = 3·I_2, η = 0  →  μ_post = 0
+        np.testing.assert_allclose(a._Lambda, 3.0 * np.eye(2))
+        np.testing.assert_allclose(a._eta, np.zeros(2))
+        np.testing.assert_allclose(a.posterior_factor_mean(), np.zeros(2))
+        assert a.implied_logit(0) == 0.0
+        assert a.implied_logit(1) == 0.0
+
+    def test_k_inferred_from_loadings(self):
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0,),
+            loadings={0: np.array([1.0, 2.0, 3.0])},
+        )
+        assert a.k == 3
+
+
+# -----------------------------------------------------------------------------
+# Posterior update math
+# -----------------------------------------------------------------------------
+
+class TestCrossMarketPosteriorMath:
+    def test_single_signal_updates_lambda_and_eta(self):
+        """One signal on market 0 with β=[1,0], value=2, σ=1.
+        Λ_new = I + [[1,0],[0,0]] = [[2,0],[0,1]]
+        η_new = 1·2·[1,0] = [2, 0]
+        μ_post = Λ⁻¹ η = [1, 0]
+        """
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0,),
+            loadings={0: np.array([1.0, 0.0])},
+            prior_precision_scale=1.0,
+        )
+        a.update_posterior(Signal(market_id=0, value=2.0, is_tail=False, noise_std=1.0))
+        np.testing.assert_allclose(a._Lambda, np.array([[2.0, 0.0], [0.0, 1.0]]))
+        np.testing.assert_allclose(a._eta, np.array([2.0, 0.0]))
+        np.testing.assert_allclose(
+            a.posterior_factor_mean(), np.array([1.0, 0.0]), rtol=1e-12
+        )
+
+    def test_signal_on_market_a_updates_implied_logit_for_market_b(self):
+        """
+        The CORE cross-market property. Two markets share the same loading
+        β=[1,0]. One signal on market 0 updates implied logit on market 1.
+        """
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0, 1), observed_markets=(0, 1),
+            loadings={0: np.array([1.0, 0.0]), 1: np.array([1.0, 0.0])},
+            prior_precision_scale=1.0,
+        )
+        assert a.implied_logit(1) == 0.0  # before signal
+        a.update_posterior(Signal(market_id=0, value=2.0, is_tail=False, noise_std=1.0))
+        # μ_post = [1, 0], so β_1 · μ = 1
+        assert a.implied_logit(0) == pytest.approx(1.0, rel=1e-12)
+        assert a.implied_logit(1) == pytest.approx(1.0, rel=1e-12)
+
+    def test_orthogonal_loadings_no_cross_update(self):
+        """Markets with orthogonal β: signal on one doesn't move belief about the other."""
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0, 1), observed_markets=(0, 1),
+            loadings={0: np.array([1.0, 0.0]), 1: np.array([0.0, 1.0])},
+            prior_precision_scale=1.0,
+        )
+        a.update_posterior(Signal(market_id=0, value=2.0, is_tail=False, noise_std=1.0))
+        # μ_post[0] moves to 1.0, μ_post[1] stays 0.0
+        assert a.implied_logit(0) == pytest.approx(1.0, rel=1e-12)
+        assert a.implied_logit(1) == pytest.approx(0.0, abs=1e-12)
+
+    def test_tail_signal_contributes_more_precision(self):
+        """Same machinery as tail-event: τ_s = 1/σ²."""
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0,),
+            loadings={0: np.array([1.0])},
+            prior_precision_scale=1.0,
+        )
+        # Tail signal: σ=0.4 → τ_s = 6.25
+        a.update_posterior(Signal(market_id=0, value=2.0, is_tail=True, noise_std=0.4))
+        # Λ_new = 1 + 6.25*1*1 = 7.25; η_new = 6.25*2*1 = 12.5; μ = 12.5/7.25
+        assert a._Lambda[0, 0] == pytest.approx(7.25, rel=1e-12)
+        assert a._eta[0] == pytest.approx(12.5, rel=1e-12)
+
+    def test_signal_on_non_observed_market_ignored(self):
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0,),
+            loadings={0: np.array([1.0, 0.0])},
+        )
+        Lambda_before = a._Lambda.copy()
+        eta_before = a._eta.copy()
+        a.update_posterior(Signal(market_id=99, value=5.0, is_tail=False, noise_std=1.0))
+        np.testing.assert_array_equal(a._Lambda, Lambda_before)
+        np.testing.assert_array_equal(a._eta, eta_before)
+
+    def test_many_signals_converge_to_truth(self):
+        """With β=[1,0] and many signals at value 2.5, factor 0 converges to 2.5
+        (modulo the small residual prior pull from prior_precision_scale=0.1).
+        """
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0,),
+            loadings={0: np.array([1.0, 0.0])},
+            prior_precision_scale=0.1,  # weak prior, but not zero
+        )
+        for _ in range(50):
+            a.update_posterior(Signal(market_id=0, value=2.5, is_tail=False, noise_std=1.0))
+        mu = a.posterior_factor_mean()
+        # Expected: μ[0] = (0.1·0 + 50·2.5) / (0.1 + 50) = 125/50.1 ≈ 2.495
+        # Residual prior pull is ≈ 0.005 below signal mean.
+        assert mu[0] == pytest.approx(125.0 / 50.1, rel=1e-9)
+        assert abs(mu[1]) < 1e-9
+
+
+# -----------------------------------------------------------------------------
+# Trade behavior
+# -----------------------------------------------------------------------------
+
+class TestCrossMarketTrade:
+    def test_review_prioritizes_largest_disagreement(self):
+        """Returns trades in descending order of |p_implied − p_market|."""
+        env = MarketEnvironment(n_markets=3, spec=MarketSpec(retreat_enabled=False))
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0, 1, 2), observed_markets=(0, 1, 2),
+            loadings={
+                0: np.array([2.0, 0.0]),   # biggest implied logit
+                1: np.array([1.0, 0.0]),
+                2: np.array([0.5, 0.0]),
+            },
+            prior_precision_scale=1.0,
+            disagreement_threshold=0.01, trade_size=1.0,
+        )
+        a.update_posterior(Signal(market_id=0, value=1.0, is_tail=False, noise_std=1.0))
+        sim = Simulator(rng=np.random.default_rng(0))
+        trades = a.review(sim, env)
+        assert len(trades) == 3
+        # Biggest implied is on market 0 (β=2 → implied=0.8), then 1, then 2
+        assert [t.market_id for t in trades] == [0, 1, 2]
+
+    def test_budget_limited_review_skips_smaller_opportunities(self):
+        """Tight budget: biggest gap consumes most capital, smaller may be skipped."""
+        env = MarketEnvironment(n_markets=3, spec=MarketSpec(retreat_enabled=False))
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=1.5,  # only enough for one trade
+            market_ids=(0, 1, 2), observed_markets=(0, 1, 2),
+            loadings={
+                0: np.array([2.0, 0.0]),
+                1: np.array([1.0, 0.0]),
+                2: np.array([0.5, 0.0]),
+            },
+            disagreement_threshold=0.01, trade_size=1.0,
+        )
+        a.update_posterior(Signal(market_id=0, value=1.0, is_tail=False, noise_std=1.0))
+        sim = Simulator(rng=np.random.default_rng(0))
+        trades = a.review(sim, env)
+        # First trade goes to market 0 (biggest disagreement)
+        assert len(trades) >= 1
+        assert trades[0].market_id == 0
+        # Pending cost should not exceed budget
+        assert a.pending_cost <= a.budget + 1e-9
+
+    def test_no_trade_on_non_primary_signal(self):
+        """Signal on observed-but-not-primary market: update posterior, don't trade."""
+        env = MarketEnvironment(n_markets=2, spec=MarketSpec(retreat_enabled=False))
+        a = CrossMarketConsistencyAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1),
+            loadings={0: np.array([1.0]), 1: np.array([1.0])},
+            disagreement_threshold=0.02,
+        )
+        sim = Simulator(rng=np.random.default_rng(0))
+        req = a.decide(sim, Signal(market_id=1, value=3.0, is_tail=False, noise_std=1.0), env)
+        # Posterior was updated but no trade on market 1 (not primary)
+        assert req is None
+        assert a.posterior_factor_mean()[0] > 0
+
+
+# -----------------------------------------------------------------------------
+# make_cross_market_agent factory
+# -----------------------------------------------------------------------------
+
+class TestMakeCrossMarketAgent:
+    def test_loadings_match_world(self):
+        cfg = InformationConfig(
+            k=3,
+            clusters=[ClusterSpec(primary_factor=0, market_count=2)],
+            n_independent_markets=1,
+        )
+        info_env = InformationEnvironment(cfg, np.random.default_rng(0))
+        agent = make_cross_market_agent(
+            agent_id=0, budget=100.0,
+            primary_markets=(0,), observed_markets=(0, 1, 2),
+            info_env=info_env,
+        )
+        # Loadings should exactly match world for each observed market
+        for m in (0, 1, 2):
+            np.testing.assert_array_equal(
+                agent.loadings[m], info_env.world.loadings_matrix[m]
+            )
+
+    def test_kwargs_forwarded(self):
+        cfg = InformationConfig(k=2, n_independent_markets=1)
+        info_env = InformationEnvironment(cfg, np.random.default_rng(0))
+        agent = make_cross_market_agent(
+            agent_id=0, budget=100.0,
+            primary_markets=(0,), observed_markets=(0,),
+            info_env=info_env,
+            trade_size=2.5, review_interval=500,
+        )
+        assert agent.trade_size == 2.5
+        assert agent.review_interval == 500
+
+
+# -----------------------------------------------------------------------------
+# Integration with population
+# -----------------------------------------------------------------------------
+
+class TestCrossMarketIntegration:
+    def test_end_to_end_runs_and_updates_posterior(self):
+        """No crash; agent's implied logit moves substantially from prior."""
+        cfg = InformationConfig(
+            k=2,
+            clusters=[ClusterSpec(primary_factor=0, market_count=3,
+                                   primary_loading_mean=1.5)],
+            idiosyncratic_std=0.3,
+            routine_rate_per_market=4.0, tail_rate_per_market=0.0,
+        )
+        rng = np.random.default_rng(0)
+        info_env = InformationEnvironment(cfg, rng)
+        market_env = MarketEnvironment(n_markets=info_env.n_markets, spec=MarketSpec())
+        agent = make_cross_market_agent(
+            agent_id=0, budget=100.0,
+            primary_markets=(0, 1, 2), observed_markets=(0, 1, 2),
+            info_env=info_env,
+            disagreement_threshold=0.03, trade_size=1.0, review_interval=1000,
+        )
+        pop = AgentPopulation([agent])
+        sim = Simulator(rng=rng, time_resolution=1000)
+        market_env.register(sim)
+        pop.register(sim, market_env, until_ts=15_000)
+        info_env.schedule_signals(sim, until_ts=15_000)
+        sim.run_until(15_000)
+
+        # Posterior should have moved meaningfully from prior
+        mu = agent.posterior_factor_mean()
+        assert np.linalg.norm(mu) > 0.5
+        # Trades should have happened
+        assert len(market_env.trade_log) > 0
+        # And no over-spending
+        assert agent.deployed <= agent.budget + 1e-9
+
+    def test_cross_market_implied_closer_to_truth_than_naive_per_market(self):
+        """
+        Per-market comparison: cross-market agent observes 5 markets, naive
+        credentialed observes only its own (1 market). Cross-market should
+        recover β·f more accurately because it pools evidence across markets.
+        """
+        cfg = InformationConfig(
+            k=2,
+            clusters=[ClusterSpec(primary_factor=0, market_count=5,
+                                   primary_loading_mean=1.5,
+                                   primary_loading_std=0.1)],
+            idiosyncratic_std=0.1,  # small idiosyncratic so factor dominates
+            routine_rate_per_market=3.0, tail_rate_per_market=0.0,
+            signal_noise_std=1.0,
+        )
+        rng = np.random.default_rng(0)
+        info_env = InformationEnvironment(cfg, rng)
+        market_env = MarketEnvironment(n_markets=info_env.n_markets, spec=MarketSpec())
+
+        # Cross-market on market 0, observing all 5
+        xm = make_cross_market_agent(
+            agent_id=0, budget=200.0,
+            primary_markets=(0,), observed_markets=(0, 1, 2, 3, 4),
+            info_env=info_env,
+            disagreement_threshold=0.02, trade_size=1.0,
+            review_interval=1000,
+        )
+        # Naive on market 0 only — observes 1/5 of the signals
+        naive = NaiveCredentialedAgent(
+            agent_id=1, budget=200.0, market_ids=(0,),
+            observation_delay=100, review_interval=1000,
+            prior_precision=1.0,  # weak prior, fair comparison
+            disagreement_threshold=0.02, trade_size=1.0,
+        )
+
+        pop = AgentPopulation([xm, naive])
+        sim = Simulator(rng=rng, time_resolution=1000)
+        market_env.register(sim)
+        pop.register(sim, market_env, until_ts=8_000)
+        info_env.schedule_signals(sim, until_ts=8_000)
+        sim.run_until(8_000)
+
+        # Truth: factor-driven logit on market 0
+        beta_0 = info_env.world.loadings_matrix[0]
+        f_truth = info_env.world.f
+        truth_logit_factor = float(beta_0 @ f_truth)
+
+        xm_implied = xm.implied_logit(0)
+        naive_mu = naive._posterior_mean[0]
+
+        xm_gap = abs(xm_implied - truth_logit_factor)
+        naive_gap = abs(naive_mu - truth_logit_factor)
+        # Cross-market should be closer to factor truth (more signals via pooling)
+        assert xm_gap < naive_gap, (
+            f"cross-market gap {xm_gap:.3f} vs naive gap {naive_gap:.3f}; "
+            f"truth_logit_factor={truth_logit_factor:.3f}, "
+            f"xm_implied={xm_implied:.3f}, naive_mu={naive_mu:.3f}"
+        )
+
+    def test_determinism(self):
+        def run(seed):
+            cfg = InformationConfig(
+                k=2,
+                clusters=[ClusterSpec(primary_factor=0, market_count=3)],
+                routine_rate_per_market=2.0,
+            )
+            rng = np.random.default_rng(seed)
+            info_env = InformationEnvironment(cfg, rng)
+            market_env = MarketEnvironment(n_markets=info_env.n_markets, spec=MarketSpec())
+            agent = make_cross_market_agent(
+                agent_id=0, budget=100.0,
+                primary_markets=(0, 1, 2), observed_markets=(0, 1, 2),
+                info_env=info_env,
+                disagreement_threshold=0.02, trade_size=1.0,
+            )
+            pop = AgentPopulation([agent])
+            sim = Simulator(rng=rng, time_resolution=1000)
+            market_env.register(sim)
+            pop.register(sim, market_env, until_ts=10_000)
+            info_env.schedule_signals(sim, until_ts=10_000)
+            sim.run_until(10_000)
+            return [(r.timestamp, r.market_id, r.agent_id, r.is_yes, r.shares, r.cost)
+                    for r in market_env.trade_log]
+
+        a = run(42)
+        b = run(42)
         assert a == b
         assert len(a) > 0

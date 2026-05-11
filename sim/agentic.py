@@ -373,6 +373,7 @@ Agent = Union[
     NoiseTrader,
     "AggregationDepthAgent",
     "TailEventReasoningAgent",
+    "CrossMarketConsistencyAgent",
 ]
 
 
@@ -818,6 +819,295 @@ def base_rates_from_truth(
         p = 1.0 / (1.0 + math.exp(-noisy_logit))
         out[m] = max(clip, min(1.0 - clip, p))
     return out
+
+
+# -----------------------------------------------------------------------------
+# Cross-market consistency agent
+# -----------------------------------------------------------------------------
+
+@dataclass
+class CrossMarketConsistencyAgent:
+    """
+    Cross-market consistency agent.
+
+    Maintains a joint Bayesian posterior over the k latent factors f given
+    signals observed across a portfolio of markets. From the posterior on
+    f, derives implied logit for each market as β_m · μ_post. Trades on
+    a market when its implied logit differs from the market's price by
+    more than the disagreement threshold.
+
+    Most complex agent class. Uses proper Bayesian updating over heuristic
+    coherence check — math is tractable, findings are stronger.
+
+    Posterior representation
+    ------------------------
+    Stored in information form so updates are O(k²) without inversion:
+
+        Λ ∈ R^{k×k}   precision matrix
+        η ∈ R^k       precision-weighted mean
+
+    Mean of the posterior is μ_post = Λ⁻¹ η — the "joint posterior over
+    factors" the handoff calls out. Each signal s_j on observed market j
+    contributes:
+
+        ΔΛ = τ_s · β_j β_j^T
+        Δη = τ_s · s_j · β_j
+
+    where τ_s = 1 / (σ_signal · signal_noise_inflation)². Reading
+    signal.noise_std directly means tail signals carry more weight
+    automatically (same as TailEventReasoningAgent).
+
+    Cross-market inference
+    ----------------------
+    Two markets with shared loadings (β_a ≈ β_b) get jointly updated by a
+    signal on either: a signal on market A moves μ_post, which moves
+    implied_logit(B) = β_b · μ_post too. This is the key property that
+    distinguishes this agent from AggregationDepth's discounted-update
+    heuristic.
+
+    Capital allocation
+    ------------------
+    Reactive `decide` trades one share on the signal's market when implied
+    disagreement exceeds threshold. Periodic `review` scans ALL primary
+    markets, sorts opportunities by |implied − market| descending, and
+    processes in that order — so when budget is limited, biggest gaps get
+    filled first rather than whichever market came first in market_ids.
+
+    What's modeled vs not
+    ---------------------
+    The agent's belief about market m's true logit is β_m · μ_post — it
+    ignores the per-market idiosyncratic ε_m. Equivalent to "the agent
+    can only infer the factor-driven component, not the idiosyncratic
+    component." Documented limitation; including ε_m would require
+    maintaining one extra posterior per observed market and complicate
+    inference; for Task 7 scope this is the right tradeoff.
+    """
+    agent_id: int
+    budget: float
+    market_ids: tuple[int, ...]            # markets it trades on
+    observed_markets: tuple[int, ...]      # markets it observes signals from (superset)
+    loadings: dict                         # {market_id: np.ndarray (k,)}
+    observation_delay: int = 0             # instant
+    review_interval: int = 1000
+    prior_precision_scale: float = 1.0     # Λ_0 = scale * I_k
+    signal_noise_inflation: float = 1.0    # multiplier on signal.noise_std for τ_s
+    disagreement_threshold: float = 0.05
+    trade_size: float = 1.0
+    safety_margin: float = 1.2
+
+    # Internal state
+    deployed: float = field(default=0.0, init=False)
+    pending_cost: float = field(default=0.0, init=False)
+    _k: int = field(default=0, init=False)
+    _Lambda: object = field(default=None, init=False)
+    _eta: object = field(default=None, init=False)
+    _observed_set: set = field(default_factory=set, init=False)
+    _primary_set: set = field(default_factory=set, init=False)
+
+    # Population dispatch knobs
+    arrival_rate_per_unit: float = field(default=0.0, init=False)
+
+    def __post_init__(self) -> None:
+        if not self.market_ids:
+            raise ValueError("market_ids must be non-empty")
+        if not self.observed_markets:
+            raise ValueError("observed_markets must be non-empty")
+        if self.observation_delay < 0:
+            raise ValueError("observation_delay must be non-negative")
+        if self.review_interval < 0:
+            raise ValueError("review_interval must be non-negative")
+        if self.prior_precision_scale <= 0:
+            raise ValueError("prior_precision_scale must be positive")
+        if self.signal_noise_inflation <= 0:
+            raise ValueError("signal_noise_inflation must be positive")
+        if self.disagreement_threshold < 0:
+            raise ValueError("disagreement_threshold must be non-negative")
+        if self.trade_size <= 0:
+            raise ValueError("trade_size must be positive")
+        if self.safety_margin < 1.0:
+            raise ValueError("safety_margin must be >= 1.0")
+
+        self.market_ids = tuple(self.market_ids)
+        self.observed_markets = tuple(self.observed_markets)
+        self._observed_set = set(self.observed_markets)
+        self._primary_set = set(self.market_ids)
+
+        for m in self.market_ids:
+            if m not in self._observed_set:
+                raise ValueError(f"primary market {m} must be in observed_markets")
+        for m in self.observed_markets:
+            if m not in self.loadings:
+                raise ValueError(f"loadings missing entry for observed market {m}")
+
+        # Determine k from any loading vector; require consistent dimensions
+        first = np.asarray(self.loadings[self.observed_markets[0]])
+        if first.ndim != 1 or first.shape[0] < 1:
+            raise ValueError("loadings must be 1-D non-empty arrays")
+        self._k = int(first.shape[0])
+        # Normalize loadings to numpy arrays of the right shape
+        normalized = {}
+        for m, beta in self.loadings.items():
+            arr = np.asarray(beta, dtype=float)
+            if arr.shape != (self._k,):
+                raise ValueError(
+                    f"loading dimension mismatch for market {m}: "
+                    f"expected ({self._k},), got {arr.shape}"
+                )
+            normalized[m] = arr
+        self.loadings = normalized
+
+        # Initialize posterior to prior
+        self._Lambda = self.prior_precision_scale * np.eye(self._k)
+        self._eta = np.zeros(self._k)
+
+    @property
+    def available(self) -> float:
+        return self.budget - self.deployed - self.pending_cost
+
+    @property
+    def k(self) -> int:
+        return self._k
+
+    def observes(self, market_id: int) -> bool:
+        return market_id in self._observed_set
+
+    def posterior_factor_mean(self) -> "np.ndarray":
+        """μ_post = Λ⁻¹ η, the posterior mean of the latent factors."""
+        return np.linalg.solve(self._Lambda, self._eta)
+
+    def posterior_factor_covariance(self) -> "np.ndarray":
+        """Σ_post = Λ⁻¹."""
+        return np.linalg.inv(self._Lambda)
+
+    def implied_logit(self, market_id: int) -> float:
+        """β_m · μ_post — the agent's implied logit for market m."""
+        if market_id not in self.loadings:
+            raise KeyError(f"market {market_id} not in this agent's loadings")
+        mu = self.posterior_factor_mean()
+        return float(self.loadings[market_id] @ mu)
+
+    def implied_logits_all(self) -> dict:
+        """Implied logits for every observed market (one matrix solve)."""
+        mu = self.posterior_factor_mean()
+        return {m: float(self.loadings[m] @ mu) for m in self.observed_markets}
+
+    def update_posterior(self, signal: Signal) -> None:
+        """
+        Rank-1 update of (Λ, η).
+
+        ΔΛ = τ_s · β_j β_j^T
+        Δη = τ_s · s_j · β_j
+        """
+        if signal.market_id not in self._observed_set:
+            return
+        if signal.noise_std <= 0:
+            return
+        beta = self.loadings[signal.market_id]
+        sigma_eff = signal.noise_std * self.signal_noise_inflation
+        tau_s = 1.0 / (sigma_eff * sigma_eff)
+        # Λ += τ_s · β βᵀ  (outer product, k×k)
+        self._Lambda = self._Lambda + tau_s * np.outer(beta, beta)
+        # η += τ_s · s · β
+        self._eta = self._eta + tau_s * signal.value * beta
+
+    def decide(
+        self,
+        sim: Simulator,
+        signal: Signal,
+        market_env: MarketEnvironment,
+    ) -> Optional[TradeRequest]:
+        """
+        Update factor posterior, then trade only if the signal is on a
+        primary market and that market's implied logit disagrees with price.
+        """
+        self.update_posterior(signal)
+        if signal.market_id not in self._primary_set:
+            return None
+        implied = self.implied_logit(signal.market_id)
+        return self._consider_trade(signal.market_id, implied, market_env)
+
+    def review(
+        self,
+        sim: Simulator,
+        market_env: MarketEnvironment,
+    ) -> list[TradeRequest]:
+        """
+        Portfolio-wide arbitrage check across all primary markets.
+
+        Sorts opportunities by |p_implied − p_market| descending, processes
+        in that order so the largest gap consumes capital first. Documented
+        as the "capital allocation logic" per the handoff.
+        """
+        implied_logits = self.implied_logits_all()
+        opportunities: list = []
+        for m_id in self.market_ids:
+            implied_logit = implied_logits[m_id]
+            p_implied = _sigmoid(implied_logit)
+            p_market = market_env.price_yes(m_id)
+            diff_mag = abs(p_implied - p_market)
+            if diff_mag >= self.disagreement_threshold:
+                opportunities.append((diff_mag, m_id, implied_logit))
+        opportunities.sort(key=lambda t: -t[0])
+        trades: list[TradeRequest] = []
+        for _, m_id, implied_logit in opportunities:
+            req = self._consider_trade(m_id, implied_logit, market_env)
+            if req is not None:
+                trades.append(req)
+        return trades
+
+    def fire_noise(self, sim: Simulator, market_env: MarketEnvironment) -> None:
+        return None
+
+    def _consider_trade(
+        self,
+        market_id: int,
+        implied_logit: float,
+        market_env: MarketEnvironment,
+    ) -> Optional[TradeRequest]:
+        req, cost = _consider_trade_helper(
+            agent_id=self.agent_id,
+            market_id=market_id,
+            posterior_mean=implied_logit,
+            market_env=market_env,
+            disagreement_threshold=self.disagreement_threshold,
+            trade_size=self.trade_size,
+            safety_margin=self.safety_margin,
+            available=self.available,
+        )
+        if req is not None:
+            self.pending_cost += cost
+        return req
+
+
+def make_cross_market_agent(
+    agent_id: int,
+    budget: float,
+    primary_markets: tuple[int, ...],
+    observed_markets: tuple[int, ...],
+    info_env: "InformationEnvironment",
+    **kwargs,
+) -> CrossMarketConsistencyAgent:
+    """
+    Construct a CrossMarketConsistencyAgent using the world's loading matrix.
+
+    Assumes the agent has perfect knowledge of β_m for each observed market —
+    a defensible idealization for prediction markets where cluster/sector
+    structure is public knowledge. Real-world relaxation (noisy β) is out
+    of scope for Task 7.
+
+    `**kwargs` is forwarded to the constructor (set review_interval,
+    trade_size, etc.).
+    """
+    loadings_matrix = info_env.world.loadings_matrix
+    loadings = {m: loadings_matrix[m].copy() for m in observed_markets}
+    return CrossMarketConsistencyAgent(
+        agent_id=agent_id,
+        budget=budget,
+        market_ids=primary_markets,
+        observed_markets=observed_markets,
+        loadings=loadings,
+        **kwargs,
+    )
 
 
 # -----------------------------------------------------------------------------
