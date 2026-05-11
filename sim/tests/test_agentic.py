@@ -18,9 +18,12 @@ import pytest
 
 from sim.agentic import (
     AgentPopulation,
+    AggregationDepthAgent,
     NaiveCredentialedAgent,
     NoiseTrader,
     _sigmoid,
+    cross_weights_from_loadings,
+    make_aggregation_depth_pool,
 )
 from sim.information import ClusterSpec, InformationConfig, InformationEnvironment, Signal
 from sim.market_env import MarketEnvironment, MarketSpec, TradeRequest
@@ -488,3 +491,330 @@ class TestIntegration:
         agent_trades = [r for r in market_env.trade_log if r.agent_id == 0]
         assert len(agent_trades) > 0
         assert agent_trades[-1].timestamp < 25_000
+
+
+# =============================================================================
+# Task 5: AggregationDepthAgent
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+
+class TestAggregationDepthValidation:
+    def _base(self, **kwargs):
+        defaults = dict(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1, 2),
+            cross_weights={(0, 1): 0.8, (0, 2): 0.3},
+        )
+        defaults.update(kwargs)
+        return defaults
+
+    def test_requires_primary_in_observed(self):
+        # Primary market 5 not in observed_markets (0, 1, 2)
+        with pytest.raises(ValueError, match="must be in observed_markets"):
+            AggregationDepthAgent(
+                agent_id=0, budget=100.0,
+                market_ids=(5,), observed_markets=(0, 1, 2),
+                cross_weights={},
+            )
+
+    def test_requires_nonempty_observed(self):
+        with pytest.raises(ValueError, match="observed_markets"):
+            AggregationDepthAgent(
+                agent_id=0, budget=100.0,
+                market_ids=(0,), observed_markets=(),
+                cross_weights={},
+            )
+
+    def test_defaults_instant_high_frequency(self):
+        a = AggregationDepthAgent(**self._base())
+        assert a.observation_delay == 0
+        assert a.review_interval == 500
+
+    def test_observes_all_observed_markets(self):
+        a = AggregationDepthAgent(**self._base())
+        assert a.observes(0) is True
+        assert a.observes(1) is True
+        assert a.observes(2) is True
+        assert a.observes(3) is False
+
+    def test_posterior_initialized_only_for_primaries(self):
+        a = AggregationDepthAgent(**self._base())
+        # Posterior exists for primary (0) but not observed-only (1, 2)
+        assert a.posterior(0) == (0.0, 2.0)
+        with pytest.raises(KeyError):
+            a.posterior(1)
+
+
+# -----------------------------------------------------------------------------
+# Cross-market posterior update math
+# -----------------------------------------------------------------------------
+
+class TestAggregationDepthPosterior:
+    def test_own_market_signal_unweighted(self):
+        """ρ = 1 for own market: should match the naive credentialed update."""
+        a = AggregationDepthAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0,), cross_weights={},
+            prior_precision=2.0, signal_precision_assumed=1.0,
+        )
+        a.update_posterior(Signal(market_id=0, value=3.0, is_tail=False, noise_std=1.0))
+        mu, tau = a.posterior(0)
+        # Expected: (2*0 + 1*3) / (2 + 1) = 1.0
+        assert mu == pytest.approx(1.0, rel=1e-12)
+        assert tau == pytest.approx(3.0, rel=1e-12)
+
+    def test_cross_market_signal_discounted_by_weight_squared(self):
+        """ρ = 0.5 cross-market signal: τ_effective = 0.25, val_effective = 0.5·s."""
+        a = AggregationDepthAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1),
+            cross_weights={(0, 1): 0.5},
+            prior_precision=2.0, signal_precision_assumed=1.0,
+        )
+        a.update_posterior(Signal(market_id=1, value=4.0, is_tail=False, noise_std=1.0))
+        mu, tau = a.posterior(0)
+        # τ_eff = 1 · 0.5² = 0.25; val_eff = 0.5 · 4.0 = 2.0
+        # τ_new = 2 + 0.25 = 2.25; μ_new = (2·0 + 0.25·2.0) / 2.25 = 0.5/2.25 = 0.222...
+        assert tau == pytest.approx(2.25, rel=1e-12)
+        assert mu == pytest.approx(0.5 / 2.25, rel=1e-12)
+
+    def test_negligible_cross_weight_ignored(self):
+        """Weight below min_cross_weight contributes nothing — keeps event-loop cheap."""
+        a = AggregationDepthAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1),
+            cross_weights={(0, 1): 0.02},  # < min_cross_weight = 0.05
+            prior_precision=2.0,
+        )
+        before = a.posterior(0)
+        a.update_posterior(Signal(market_id=1, value=10.0, is_tail=False, noise_std=1.0))
+        assert a.posterior(0) == before
+
+    def test_unknown_cross_market_treated_as_zero(self):
+        """No entry in cross_weights → no posterior change."""
+        a = AggregationDepthAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1, 2),
+            cross_weights={(0, 1): 0.8},  # (0, 2) absent
+        )
+        before = a.posterior(0)
+        a.update_posterior(Signal(market_id=2, value=5.0, is_tail=False, noise_std=1.0))
+        assert a.posterior(0) == before
+
+    def test_many_cross_signals_accelerate_convergence(self):
+        """
+        At ρ = 1 (own market), reaching τ_post = 11 needs 9 signals.
+        With ρ = 0.5 cross-market, each signal contributes 0.25 to precision,
+        so reaching τ_post = 11 needs ~36 cross-signals. Verify the agent
+        accumulates evidence from cross-market signals at the expected rate.
+        """
+        a = AggregationDepthAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1),
+            cross_weights={(0, 1): 0.5},
+            prior_precision=2.0, signal_precision_assumed=1.0,
+        )
+        for _ in range(36):
+            a.update_posterior(Signal(market_id=1, value=2.0, is_tail=False, noise_std=1.0))
+        _, tau = a.posterior(0)
+        # τ_post = 2 + 36 · 0.25 = 11.0
+        assert tau == pytest.approx(11.0, rel=1e-12)
+
+
+# -----------------------------------------------------------------------------
+# Trade behavior
+# -----------------------------------------------------------------------------
+
+class TestAggregationDepthTrade:
+    def test_does_not_trade_on_non_primary_signal(self):
+        """A signal on observed-but-not-primary market should not produce a trade
+        even after it updates the primary posterior."""
+        a = AggregationDepthAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1),
+            cross_weights={(0, 1): 0.9},
+            prior_precision=1.0, disagreement_threshold=0.02,
+        )
+        # Pile cross-signals to push posterior far from 0
+        for _ in range(50):
+            a.update_posterior(Signal(market_id=1, value=3.0, is_tail=False, noise_std=1.0))
+        # Signal on market 1 arrives; agent updates but should NOT trade on market 1
+        sim = Simulator(rng=np.random.default_rng(0))
+        env = MarketEnvironment(n_markets=2, spec=MarketSpec(retreat_enabled=False))
+        req = a.decide(sim, Signal(market_id=1, value=3.0, is_tail=False, noise_std=1.0), env)
+        assert req is None
+
+    def test_trades_on_primary_signal_when_posterior_moved(self):
+        a = AggregationDepthAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0,), observed_markets=(0, 1),
+            cross_weights={(0, 1): 0.9},
+            prior_precision=1.0, disagreement_threshold=0.02, trade_size=1.0,
+        )
+        # Build up posterior via cross-market signals
+        for _ in range(40):
+            a.update_posterior(Signal(market_id=1, value=3.0, is_tail=False, noise_std=1.0))
+        sim = Simulator(rng=np.random.default_rng(0))
+        env = MarketEnvironment(n_markets=2, spec=MarketSpec(retreat_enabled=False))
+        # Now a fresh signal on the PRIMARY market should produce a trade
+        req = a.decide(sim, Signal(market_id=0, value=3.0, is_tail=False, noise_std=1.0), env)
+        assert req is not None
+        assert req.is_yes is True
+        assert req.market_id == 0
+
+
+# -----------------------------------------------------------------------------
+# cross_weights_from_loadings helper
+# -----------------------------------------------------------------------------
+
+class TestCrossWeightsFromLoadings:
+    def test_self_pairs_excluded(self):
+        loadings = np.array([[1.0, 0.0], [0.0, 1.0]])
+        w = cross_weights_from_loadings(loadings, (0, 1), (0, 1))
+        assert (0, 0) not in w
+        assert (1, 1) not in w
+
+    def test_same_cluster_high_weight(self):
+        """Markets with same loading direction have weight ≈ 1."""
+        loadings = np.array([
+            [2.0, 0.1],   # market 0: heavy on factor 0
+            [1.8, 0.05],  # market 1: heavy on factor 0 (same cluster)
+            [0.1, 2.0],   # market 2: heavy on factor 1 (different cluster)
+        ])
+        w = cross_weights_from_loadings(loadings, (0,), (1, 2))
+        assert w[(0, 1)] > 0.9
+        # market 0 vs 2: nearly orthogonal → weight near 0 → may be dropped
+        assert (0, 2) not in w or abs(w[(0, 2)]) < 0.2
+
+    def test_min_weight_threshold(self):
+        loadings = np.array([[1.0, 0.0], [0.05, 1.0]])  # nearly orthogonal
+        w = cross_weights_from_loadings(loadings, (0,), (1,), min_weight=0.5)
+        assert w == {}
+
+
+# -----------------------------------------------------------------------------
+# Factory
+# -----------------------------------------------------------------------------
+
+class TestMakeAggregationDepthPool:
+    def test_default_priors_log_spaced(self):
+        pool = make_aggregation_depth_pool(
+            n_agents=3, base_id=100, budget=50.0,
+            primary_markets=(0,), observed_markets=(0, 1),
+            cross_weights={(0, 1): 0.8},
+        )
+        assert len(pool) == 3
+        priors = [a.prior_precision for a in pool]
+        # Log-spaced from 0.5 to 10
+        assert priors[0] == pytest.approx(0.5, rel=1e-6)
+        assert priors[-1] == pytest.approx(10.0, rel=1e-6)
+        assert priors[0] < priors[1] < priors[2]
+        # Agent IDs are base_id + i
+        assert [a.agent_id for a in pool] == [100, 101, 102]
+
+    def test_custom_priors_passed_through(self):
+        pool = make_aggregation_depth_pool(
+            n_agents=2, base_id=0, budget=50.0,
+            primary_markets=(0,), observed_markets=(0,), cross_weights={},
+            prior_precisions=[3.0, 7.0],
+        )
+        assert [a.prior_precision for a in pool] == [3.0, 7.0]
+
+    def test_kwargs_forwarded(self):
+        pool = make_aggregation_depth_pool(
+            n_agents=2, base_id=0, budget=50.0,
+            primary_markets=(0,), observed_markets=(0,), cross_weights={},
+            trade_size=2.5, disagreement_threshold=0.10,
+        )
+        for a in pool:
+            assert a.trade_size == 2.5
+            assert a.disagreement_threshold == 0.10
+
+
+# -----------------------------------------------------------------------------
+# Integration
+# -----------------------------------------------------------------------------
+
+class TestAggregationDepthIntegration:
+    def test_works_with_population(self):
+        """End-to-end: aggregation-depth pool trades alongside naive credentialed
+        and noise traders. No crash, sane trade volume, determinism preserved."""
+        cfg = InformationConfig(
+            k=2,
+            clusters=[ClusterSpec(primary_factor=0, market_count=3,
+                                   primary_loading_mean=1.5)],
+            idiosyncratic_std=0.3,
+            routine_rate_per_market=4.0, tail_rate_per_market=0.0,
+        )
+        rng = np.random.default_rng(0)
+        info_env = InformationEnvironment(cfg, rng)
+        market_env = MarketEnvironment(n_markets=info_env.n_markets, spec=MarketSpec())
+        cross_w = cross_weights_from_loadings(
+            info_env.world.loadings_matrix,
+            primary_markets=(0,),
+            observed_markets=(0, 1, 2),
+        )
+        # Aggregation-depth pool on market 0, observing markets 0,1,2
+        agg_pool = make_aggregation_depth_pool(
+            n_agents=3, base_id=100, budget=50.0,
+            primary_markets=(0,), observed_markets=(0, 1, 2),
+            cross_weights=cross_w,
+            disagreement_threshold=0.02, trade_size=1.0,
+        )
+        # Plus a naive credentialed on market 0 for comparison
+        naive = NaiveCredentialedAgent(
+            agent_id=0, budget=50.0, market_ids=(0,),
+            observation_delay=500, review_interval=2000,
+            prior_precision=2.0, disagreement_threshold=0.02,
+        )
+        pop = AgentPopulation([naive] + agg_pool)
+        sim = Simulator(rng=rng, time_resolution=1000)
+        market_env.register(sim)
+        pop.register(sim, market_env, until_ts=20_000)
+        info_env.schedule_signals(sim, until_ts=20_000)
+        sim.run_until(20_000)
+
+        # All agents should have made at least some trades
+        for agent in [naive] + agg_pool:
+            n_trades = sum(1 for r in market_env.trade_log if r.agent_id == agent.agent_id)
+            assert n_trades > 0, f"agent {agent.agent_id} made no trades"
+        # And no agent should have over-spent
+        for agent in [naive] + agg_pool:
+            assert agent.deployed <= agent.budget + 1e-9
+
+    def test_determinism_with_aggregation_pool(self):
+        """Same seed → same trade log when pool includes aggregation-depth agents."""
+        def run(seed):
+            cfg = InformationConfig(
+                k=2,
+                clusters=[ClusterSpec(primary_factor=0, market_count=3)],
+                routine_rate_per_market=2.0, tail_rate_per_market=0.0,
+            )
+            rng = np.random.default_rng(seed)
+            info_env = InformationEnvironment(cfg, rng)
+            market_env = MarketEnvironment(n_markets=info_env.n_markets, spec=MarketSpec())
+            cw = cross_weights_from_loadings(
+                info_env.world.loadings_matrix, (0,), (0, 1, 2),
+            )
+            agents = make_aggregation_depth_pool(
+                n_agents=2, base_id=100, budget=30.0,
+                primary_markets=(0,), observed_markets=(0, 1, 2),
+                cross_weights=cw,
+            ) + [NoiseTrader(agent_id=10, budget=20.0, market_ids=(0, 1, 2),
+                              arrival_rate_per_unit=0.5)]
+            pop = AgentPopulation(agents)
+            sim = Simulator(rng=rng, time_resolution=1000)
+            market_env.register(sim)
+            pop.register(sim, market_env, until_ts=15_000)
+            info_env.schedule_signals(sim, until_ts=15_000)
+            sim.run_until(15_000)
+            return [(r.timestamp, r.market_id, r.agent_id, r.is_yes,
+                     r.shares, r.cost) for r in market_env.trade_log]
+
+        a = run(seed=42)
+        b = run(seed=42)
+        assert a == b
+        assert len(a) > 0

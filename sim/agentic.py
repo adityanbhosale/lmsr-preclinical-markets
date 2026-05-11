@@ -90,6 +90,64 @@ def _sigmoid(x: float) -> float:
     return ex / (1.0 + ex)
 
 
+def _consider_trade_helper(
+    agent_id: int,
+    market_id: int,
+    posterior_mean: float,
+    market_env: MarketEnvironment,
+    disagreement_threshold: float,
+    trade_size: float,
+    safety_margin: float,
+    available: float,
+    min_shares: float = 0.1,
+) -> tuple[Optional[TradeRequest], float]:
+    """
+    Shared trade-decision logic used by all posterior-based agent classes.
+
+    Returns (TradeRequest, cost_committed) on a yes-trade, or (None, 0.0) if:
+      - posterior agrees with market price (within disagreement_threshold)
+      - capital exhausted to below `min_shares` worth
+
+    Capital handling: if the full trade_size fits within `available`, schedule
+    it. Otherwise, binary-search the largest fractional size that fits. Uses
+    market.cost_of_trade() (LS-LMSR exact) — not shares × price, which
+    underestimates by ~2x at p ≈ 0.5.
+    """
+    p_post = _sigmoid(posterior_mean)
+    p_market = market_env.price_yes(market_id)
+    diff = p_post - p_market
+    if abs(diff) < disagreement_threshold:
+        return None, 0.0
+    is_yes = bool(diff > 0)
+    shares = trade_size
+    market = market_env.markets[market_id]
+    cost_est = market.cost_of_trade(is_yes, shares) * safety_margin
+    if cost_est > available:
+        lo, hi = 0.0, shares
+        for _ in range(20):
+            mid = 0.5 * (lo + hi)
+            if mid < 1e-9:
+                break
+            c = market.cost_of_trade(is_yes, mid) * safety_margin
+            if c <= available:
+                lo = mid
+            else:
+                hi = mid
+        shares = lo
+        if shares < min_shares:
+            return None, 0.0
+        cost_est = market.cost_of_trade(is_yes, shares) * safety_margin
+    return (
+        TradeRequest(
+            market_id=market_id,
+            agent_id=agent_id,
+            is_yes=is_yes,
+            shares=shares,
+        ),
+        cost_est,
+    )
+
+
 # -----------------------------------------------------------------------------
 # Naive credentialed agent
 # -----------------------------------------------------------------------------
@@ -216,42 +274,19 @@ class NaiveCredentialedAgent:
         market_id: int,
         market_env: MarketEnvironment,
     ) -> Optional[TradeRequest]:
-        mu_post = self._posterior_mean[market_id]
-        p_post = _sigmoid(mu_post)
-        p_market = market_env.price_yes(market_id)
-        diff = p_post - p_market
-        if abs(diff) < self.disagreement_threshold:
-            return None
-        is_yes = diff > 0
-        shares = self.trade_size
-        # Use the market's exact LS-LMSR cost rather than `shares * price`.
-        # LS-LMSR's liquidity-sensitivity term makes the latter substantially
-        # underestimate cost (≈ 2x at p=0.5 with default seeds).
-        market = market_env.markets[market_id]
-        cost_est = market.cost_of_trade(is_yes, shares) * self.safety_margin
-        if cost_est > self.available:
-            # Binary-search the largest shares that fits available.
-            lo, hi = 0.0, shares
-            for _ in range(20):
-                mid = 0.5 * (lo + hi)
-                if mid < 1e-9:
-                    break
-                c = market.cost_of_trade(is_yes, mid) * self.safety_margin
-                if c <= self.available:
-                    lo = mid
-                else:
-                    hi = mid
-            shares = lo
-            if shares < 0.1:
-                return None
-            cost_est = market.cost_of_trade(is_yes, shares) * self.safety_margin
-        self.pending_cost += cost_est
-        return TradeRequest(
-            market_id=market_id,
+        req, cost = _consider_trade_helper(
             agent_id=self.agent_id,
-            is_yes=is_yes,
-            shares=shares,
+            market_id=market_id,
+            posterior_mean=self._posterior_mean[market_id],
+            market_env=market_env,
+            disagreement_threshold=self.disagreement_threshold,
+            trade_size=self.trade_size,
+            safety_margin=self.safety_margin,
+            available=self.available,
         )
+        if req is not None:
+            self.pending_cost += cost
+        return req
 
 
 # -----------------------------------------------------------------------------
@@ -333,7 +368,264 @@ class NoiseTrader:
         )
 
 
-Agent = Union[NaiveCredentialedAgent, NoiseTrader]
+Agent = Union[NaiveCredentialedAgent, NoiseTrader, "AggregationDepthAgent"]
+
+
+# -----------------------------------------------------------------------------
+# Aggregation-depth agent
+# -----------------------------------------------------------------------------
+
+@dataclass
+class AggregationDepthAgent:
+    """
+    Aggregation-depth agent.
+
+    Differs from NaiveCredentialedAgent in three ways:
+      1. Observes signals on a WIDER SET of markets (`observed_markets` ⊇
+         `market_ids`). Cross-market signals update the agent's posterior on
+         each primary market via a discounted Bayesian update, weighted by
+         the loadings-derived correlation between markets.
+      2. Observation is INSTANT (`observation_delay = 0` by default).
+      3. Reviews at HIGH FREQUENCY (`review_interval = 500` by default vs
+         naive credentialed's 5000).
+
+    The "multiple sub-types varying in evidence-weighting prior" pattern
+    from the handoff is realized by instantiating multiple agents with
+    different `prior_precision` values — see `make_aggregation_depth_pool`.
+
+    Cross-market signal update
+    --------------------------
+    For each primary market i, when signal s_j arrives on observed market j
+    with weight ρ_ij (≈ cosine similarity of latent loadings):
+
+        τ_effective = signal_precision_assumed · ρ²
+        value_eff   = ρ · s_j
+        τ_new       = τ_old + τ_effective
+        μ_new       = (τ_old · μ_old + τ_effective · value_eff) / τ_new
+
+    This is the precision-weighted sequential update with the cross-market
+    signal treated as a discounted own-market signal. For ρ = 1 (own market)
+    it reduces to the standard update. For ρ → 0 it adds zero info. Weights
+    below `min_cross_weight` are ignored entirely (no event-loop overhead).
+    """
+    agent_id: int
+    budget: float
+    market_ids: tuple[int, ...]            # primary markets (where it trades)
+    observed_markets: tuple[int, ...]      # superset (where it observes signals)
+    cross_weights: dict                    # {(primary_id, observed_id): weight}
+    observation_delay: int = 0             # instant by default
+    review_interval: int = 500             # high-frequency by default
+    prior_precision: float = 2.0           # moderate by default
+    signal_precision_assumed: float = 1.0
+    disagreement_threshold: float = 0.05
+    trade_size: float = 1.0
+    safety_margin: float = 1.2
+    min_cross_weight: float = 0.05         # below this, treat cross-market signal as 0
+
+    # Internal state
+    deployed: float = field(default=0.0, init=False)
+    pending_cost: float = field(default=0.0, init=False)
+    _posterior_mean: dict = field(default_factory=dict, init=False)
+    _posterior_precision: dict = field(default_factory=dict, init=False)
+
+    # Population dispatch knobs (uniform interface; doesn't fire noise)
+    arrival_rate_per_unit: float = field(default=0.0, init=False)
+
+    def __post_init__(self) -> None:
+        if not self.market_ids:
+            raise ValueError("market_ids must be non-empty")
+        if not self.observed_markets:
+            raise ValueError("observed_markets must be non-empty")
+        if self.observation_delay < 0:
+            raise ValueError("observation_delay must be non-negative")
+        if self.review_interval < 0:
+            raise ValueError("review_interval must be non-negative")
+        if self.prior_precision <= 0:
+            raise ValueError("prior_precision must be positive")
+        if self.signal_precision_assumed <= 0:
+            raise ValueError("signal_precision_assumed must be positive")
+        if self.disagreement_threshold < 0:
+            raise ValueError("disagreement_threshold must be non-negative")
+        if self.trade_size <= 0:
+            raise ValueError("trade_size must be positive")
+        if self.safety_margin < 1.0:
+            raise ValueError("safety_margin must be >= 1.0")
+        if not (0 <= self.min_cross_weight <= 1):
+            raise ValueError("min_cross_weight must be in [0, 1]")
+        self.market_ids = tuple(self.market_ids)
+        self.observed_markets = tuple(self.observed_markets)
+        for m in self.market_ids:
+            if m not in self.observed_markets:
+                raise ValueError(
+                    f"primary market {m} must be in observed_markets"
+                )
+        # Posteriors are kept only for primary markets — non-primary markets
+        # are observed for information but not traded.
+        for m in self.market_ids:
+            self._posterior_mean[m] = 0.0
+            self._posterior_precision[m] = self.prior_precision
+
+    @property
+    def available(self) -> float:
+        return self.budget - self.deployed - self.pending_cost
+
+    def observes(self, market_id: int) -> bool:
+        return market_id in self.observed_markets
+
+    def posterior(self, market_id: int) -> tuple[float, float]:
+        return self._posterior_mean[market_id], self._posterior_precision[market_id]
+
+    def update_posterior(self, signal: Signal) -> None:
+        """Update every primary market's posterior using this signal."""
+        sig_m = signal.market_id
+        for primary_m in self.market_ids:
+            if primary_m == sig_m:
+                weight = 1.0
+            else:
+                weight = self.cross_weights.get((primary_m, sig_m), 0.0)
+            if abs(weight) < self.min_cross_weight:
+                continue
+            tau_eff = self.signal_precision_assumed * weight * weight
+            val_eff = weight * signal.value
+            old_mu = self._posterior_mean[primary_m]
+            old_tau = self._posterior_precision[primary_m]
+            new_tau = old_tau + tau_eff
+            new_mu = (old_tau * old_mu + tau_eff * val_eff) / new_tau
+            self._posterior_mean[primary_m] = new_mu
+            self._posterior_precision[primary_m] = new_tau
+
+    def decide(
+        self,
+        sim: Simulator,
+        signal: Signal,
+        market_env: MarketEnvironment,
+    ) -> Optional[TradeRequest]:
+        """Update posteriors on all primary markets; trade only on primary signals."""
+        self.update_posterior(signal)
+        if signal.market_id in self._posterior_mean:
+            return self._consider_trade(signal.market_id, market_env)
+        return None
+
+    def review(
+        self,
+        sim: Simulator,
+        market_env: MarketEnvironment,
+    ) -> list[TradeRequest]:
+        out: list[TradeRequest] = []
+        for m_id in self.market_ids:
+            req = self._consider_trade(m_id, market_env)
+            if req is not None:
+                out.append(req)
+        return out
+
+    def fire_noise(self, sim: Simulator, market_env: MarketEnvironment) -> None:
+        return None
+
+    def _consider_trade(
+        self,
+        market_id: int,
+        market_env: MarketEnvironment,
+    ) -> Optional[TradeRequest]:
+        req, cost = _consider_trade_helper(
+            agent_id=self.agent_id,
+            market_id=market_id,
+            posterior_mean=self._posterior_mean[market_id],
+            market_env=market_env,
+            disagreement_threshold=self.disagreement_threshold,
+            trade_size=self.trade_size,
+            safety_margin=self.safety_margin,
+            available=self.available,
+        )
+        if req is not None:
+            self.pending_cost += cost
+        return req
+
+
+# -----------------------------------------------------------------------------
+# Helpers for constructing aggregation-depth pools
+# -----------------------------------------------------------------------------
+
+def cross_weights_from_loadings(
+    loadings: "np.ndarray",
+    primary_markets: tuple[int, ...],
+    observed_markets: tuple[int, ...],
+    min_weight: float = 0.1,
+) -> dict[tuple[int, int], float]:
+    """
+    Compute cross-market weights from latent factor loadings β_m ∈ R^k.
+
+    Weight(i, j) = cosine similarity of β_i, β_j. Self-pairs (i == j) are
+    omitted from the returned dict (the agent treats them as weight 1.0
+    implicitly). Pairs with |weight| < `min_weight` are dropped.
+
+    Typical usage:
+        weights = cross_weights_from_loadings(
+            info_env.world.loadings_matrix,
+            primary_markets, observed_markets,
+        )
+    """
+    norms = np.linalg.norm(loadings, axis=1)
+    out: dict[tuple[int, int], float] = {}
+    for i in primary_markets:
+        for j in observed_markets:
+            if i == j:
+                continue
+            denom = norms[i] * norms[j]
+            if denom < 1e-12:
+                continue
+            cos_sim = float(loadings[i] @ loadings[j] / denom)
+            if abs(cos_sim) >= min_weight:
+                out[(i, j)] = cos_sim
+    return out
+
+
+def make_aggregation_depth_pool(
+    n_agents: int,
+    base_id: int,
+    budget: float,
+    primary_markets: tuple[int, ...],
+    observed_markets: tuple[int, ...],
+    cross_weights: dict,
+    prior_precisions: Optional[list[float]] = None,
+    **kwargs,
+) -> list["AggregationDepthAgent"]:
+    """
+    Build a pool of AggregationDepthAgents with diverse `prior_precision`.
+
+    The "multiple sub-types varying in evidence-weighting prior" pattern from
+    the handoff. If `prior_precisions` is None, defaults to a log-spaced
+    range from 0.5 (credulous) to 10.0 (skeptical).
+
+    `**kwargs` is forwarded to every agent's constructor (so you can set
+    `trade_size`, `disagreement_threshold`, etc. uniformly across the pool).
+    """
+    if n_agents <= 0:
+        raise ValueError("n_agents must be positive")
+    if prior_precisions is None:
+        if n_agents == 1:
+            prior_precisions = [2.0]
+        else:
+            log_lo, log_hi = math.log(0.5), math.log(10.0)
+            prior_precisions = [
+                math.exp(log_lo + (log_hi - log_lo) * i / (n_agents - 1))
+                for i in range(n_agents)
+            ]
+    if len(prior_precisions) != n_agents:
+        raise ValueError(
+            f"len(prior_precisions) = {len(prior_precisions)} != n_agents = {n_agents}"
+        )
+    return [
+        AggregationDepthAgent(
+            agent_id=base_id + i,
+            budget=budget,
+            market_ids=primary_markets,
+            observed_markets=observed_markets,
+            cross_weights=cross_weights,
+            prior_precision=prior_precisions[i],
+            **kwargs,
+        )
+        for i in range(n_agents)
+    ]
 
 
 # -----------------------------------------------------------------------------
