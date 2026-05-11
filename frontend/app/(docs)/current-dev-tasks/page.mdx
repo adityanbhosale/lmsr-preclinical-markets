@@ -35,6 +35,95 @@ The core architectural decisions I had to make were as follows:
 
         * Noise traders: Poisson-arrival random trades at low rates. Essentially just background flow.
 
+**Outcome Metrics**
+
+    1. Marginal informational contribution by class
+
+    2. Rent-extraction profile
+
+    3. Tail-regime behavior
+
+    4. Information flow latency
+
+
+**Dev-Tasks (11)**
+
+    1. Event-driven simulator infrastructure – event queue, simulated time clock, event-processing loop. Use 'simpy' or 'heapq'-based priority queue.
+
+        Includes the following:
+
+            * events.py – 'Event' dataclass with __1t__ defined on (timestamp, priority, insertion_order), EventQueue wrapping 'heapq', EventPriority constants (SIGNAL=0, DECISION=100, TRADE=200, BOOKKEEPING=1000). Open integer space – downstream modules add their own levels.
+
+            * simulator.py – 'Simulator' with injected np.random.Generator, integer-tick clock, one-handler-per-event-type registry, 'run_until'/'run_count'/'schedule'/'schedule_at'. Plus 'schedule_poisson(sim, rate, event_type, until_ts, payload_fn, priority)' helper for batch Poisson pre-scheduling.
+
+            * 'test_events.py' and 'test_simulator.py' – 30 tests covering ordering, peek/pop, total order at pop, handler dispatch, renewal pattern, determinism (same seed --> identical observed trajectory including event types and insertion orders), priority semantics (signal-before-decision at same tick), and the four Poisson properties.
+
+    2. Information-generating process – multi-market signal generator with latent factor structure, tail-event markets, per-market arrival rates.
+
+        Includes the following:
+
+            * set of markets (~15) whose true probabilities aren't independent. some move together in clusters (i.e. all oncology trials share exposure to FDA staffing levels, or all cardiovascular trials share exposure to a different factor), others are standalone. The underlying math is as follows: '5 hidden factors, each market loads on them differently'.
+
+            * continuous stream of signals arriving at random times for each market – noisy hints about what that market's true probability is. most signals are routine (noisy). small fraction of signals are tail signals (sharper, more informative, but rarer), essentially something that only a careful Bayesian agent would extract properly.
+
+            * toggle for how tail signals are generated: either as their own separate steam, or mixed into the main stream & tagged. this is mathematically equivalent in the aggregate; the toggle is a robustness check for later findings.
+
+    3. Continuous-time market environment – LS-LMSR + polynomial decay retreat extended for event-driven trading at arbitrary timestamps.
+
+        Includes the following:
+
+            * sim/market.py is already Solidity-parity-tested – wrap
+
+            * create new module (sim/market_env.py) which holds the multi-market substrate, trade event handler, and trade log
+
+            * polynomial decay as the default in MarketSpec (overrides ABMMConfig's 'exponential' default)
+
+            * parity strategy: existing 'test_market_parity.py' already proves LSLMSRMarket <> Solidity. Add new test proving that 'event-driven wrapper' <> 'direct LSLMSRMarket calls' is bit-exact. In combination these two proofs allows us to assume that 'event-driven path' <> Solidity transitively.
+
+            This layer is essentially the 'trading floor' where markets actually exist and trades execute. It's a wrapper around the existing LSLMSRMarket that holds N independent market indexed by market_id (matching the information env's market space), registers a "trade" event handler (agents schedule TradeRequest payloads via the simulator, the handler routes each one to the right market and executes), logs every trade with full context (i.e. timestamp, market, agent, side, shares, cost, price, before/after) for later analysis, defaults retreat to polynomial decay (overriding ABMMConfig's 'exponential default').
+
+            The parity strategy does not involve reimplementing LS-LMSR. The wrapper just calls our existing 'execute_trade' function. Two new tests in TestParityWithDirectCalls run identical trade sequences via direct calls vs the event path and assert bit-exact equality on q_yes, q_no, prices, and costs. Combined with the existing 'test_market_parity.py' file (proving LSLMSRMarket <> Solidity to 1e-9), this gives the event-driven path <> Solidity transitively without drift.
+
+    4. Baseline agents in continuous time – naive credentialed + noise with mixed reactive-plus-review policy. Port from existing tick-based code.
+
+        Includes the following:
+
+            * Native credentialed agents – experts who watch signals on their market(s), but slowly (with a delay), and with a stubborn belief that 'things are probabily 50/50 till I see overwhelming evidence.' They update beliefs after each signal, and decide to trade when their belief diverges from market price by more than some threshold. They both react to signals AND do periodic market reviews.
+
+            * Noise traders – background flow. random buy/sells at a Poisson rate, no beliefs, no observation.
+
+            * AgentPopulation orchestrator – owns four event types (signal, decision, review, noise) and routes each event to the right asset
+
+        Design choices:
+
+            * Build a capital constraint model with 'pending_cost'. each agent has 'deployed' (actual costs from log) and 'pending_cost' (estimated costs scheduled but not yet executed). Available capital = budget – deployed – pending_cost. this is required because at a single tick, all DECISION events fire before any TRADE event – so a same-tick collision between a review and a reactive decision would otherwise commit to two trades on a stale "deployed" state.
+
+            * Exact cost estimation via 'market.cost_of_trade() function. I'd initially used shares • price • safety_margin and discovered that it underestimates LS-LMSR's actual cost by ~2.4x at p = 0.5 (LS-LMSR has a liquidity-sensitivity term that charges more than the marginal price). I switched to calling the market's actual cost function – exact, no calibration necessary.
+
+            * Modal bias = strong Gaussian prior at logit 0. default 'prior_precision = 5.0' means that even after 50 signals, the prior still carrier ~9% weight in the posterior. this produces the 'anchors near 0.5' property I'll test against tail-aware agents in Task 6.
+
+    5. Aggregation-depth agent class – multiple sub-types, instant observation, mixed policy.
+
+    6. Tail-event reasoning agent class – bayesian with base-rate priors.
+
+    7. Cross-market consistency agent class – joint posterior over latent factors, portfoklio-wide arbitrage. This is most complex. Use proper Bayesian updated (which is slower but more defensible) over heuristic coherence checks. Make sure to influce capital allocation constraints for agent.
+
+    8. Multi-market runner – parallel markets, shared agent population
+
+    9. Sweep design – Cartesian product over agent mix • market regime (central/tail/mixed) • correlation structure (independent/weakly/strongly correlated) • signal arrival rate (sparse/moderate/dense). 2000-4000 runs. Define convergence and information-flow-latency thresholds before running. Might be 4-8 hours of compute.
+
+    10. Analysis – compute four metrics, generate headline figures (cross-tabs, PnL distributions, latency comparisons, tail-regime trajectories). Parquet outputs.
+
+    11. Writeup – research note in 'sim/RESULTS_AGENTIC.md'. Lead with falsifiable findings, followed by methodology and limitations.
+
+**End Product of Simulation**
+
+Research artifact that empirically tests three formally-stated hypotheses about how different sources of informatione edge contribute to event-contract market price discovery, distinguishes informational augmentation from rent extraction quantitatively, generalizes beyond the dual-layer model, and provides a falsifiable framework other researchers can engage with substantively via open-source.
+
+To my knowledge, no one has formalized the agent-class-decomposition view of where market-aggregated information originates. Some papers have formalized incentive-compatibility under active block producers, which is a structurally similar finding. This extends that framework to the question of where the information in active block producer actions actually comes from. Key findings are centered around targeting prediction-market mechanism design literature.
+
+
+
 ## Updated Thoughts on Agentic Trading Applications
 
 Standard prediction market theory assumes information asymmetry comes from differential access to informationn (i.e., Trader A has insider data on a trial, Trader B doesn't. A's trade reveals data and the market converges to truth). All canonical work assumes this structure (Hanson, Chen-Pennock).
