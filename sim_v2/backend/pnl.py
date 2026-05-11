@@ -97,9 +97,13 @@ def settle_agents(seed_result: SeedResult) -> list[AgentPnL]:
         no_value = 0.0
         cost = 0.0
         for m, (y, n, c) in by_market.items():
-            p_star = seed_result.p_star_by_market[m]
-            yes_value += y * p_star
-            no_value += n * (1.0 - p_star)
+            # Mark-to-market at horizon: positions valued at final market price,
+            # not at the true probability. Reflects what traders could realize
+            # by closing positions. p_star reachability isn't guaranteed (see
+            # v1 Finding 3 LS-LMSR ceiling).
+            final_price = float(seed_result.price_trace[m][-1])
+            yes_value += y * final_price
+            no_value += n * (1.0 - final_price)
             cost += c
         pnls.append(
             AgentPnL(
