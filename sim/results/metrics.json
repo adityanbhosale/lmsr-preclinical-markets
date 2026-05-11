@@ -1,0 +1,512 @@
+{
+  "metric_1_marginal_contribution": [
+    {
+      "mix_name": "plus_tail",
+      "regime_name": "routine_low_corr",
+      "mean_brier_baseline": 0.03024218483936649,
+      "mean_brier_mix": 0.030377430977254462,
+      "mean_delta": -0.0001352461378879618,
+      "ci_low": -0.0002751322595258833,
+      "ci_high": 4.639983749959742e-06,
+      "p_value": 0.057941148783319234,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "regime_name": "routine_low_corr",
+      "mean_brier_baseline": 0.03024218483936649,
+      "mean_brier_mix": 0.030477976613079636,
+      "mean_delta": -0.0002357917737131417,
+      "ci_low": -0.00032683750469859765,
+      "ci_high": -0.00014474604272768577,
+      "p_value": 1.3915633798345862e-06,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "mix_name": "plus_cross",
+      "regime_name": "routine_low_corr",
+      "mean_brier_baseline": 0.03024218483936649,
+      "mean_brier_mix": 0.030260841832858553,
+      "mean_delta": -1.8656993492055227e-05,
+      "ci_low": -8.26475996768372e-05,
+      "ci_high": 4.5333612692726735e-05,
+      "p_value": 0.5642302866086268,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "all_four",
+      "regime_name": "routine_low_corr",
+      "mean_brier_baseline": 0.03024218483936649,
+      "mean_brier_mix": 0.027494627161888895,
+      "mean_delta": 0.002747557677477602,
+      "ci_low": 0.0023136610490579867,
+      "ci_high": 0.0031814543058972175,
+      "p_value": 3.230070187123878e-22,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "mix_name": "plus_tail",
+      "regime_name": "routine_high_corr",
+      "mean_brier_baseline": 0.07701488225328111,
+      "mean_brier_mix": 0.07694946332075506,
+      "mean_delta": 6.541893252607219e-05,
+      "ci_low": -6.171965899123289e-05,
+      "ci_high": 0.00019255752404337726,
+      "p_value": 0.3097546339828745,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "regime_name": "routine_high_corr",
+      "mean_brier_baseline": 0.07701488225328111,
+      "mean_brier_mix": 0.07702951680219289,
+      "mean_delta": -1.4634548911763998e-05,
+      "ci_low": -7.115701469389005e-05,
+      "ci_high": 4.188791687036206e-05,
+      "p_value": 0.6085752111605118,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "plus_cross",
+      "regime_name": "routine_high_corr",
+      "mean_brier_baseline": 0.07701488225328111,
+      "mean_brier_mix": 0.07699463658370921,
+      "mean_delta": 2.024566957190501e-05,
+      "ci_low": -1.1213760956063535e-05,
+      "ci_high": 5.170510009987356e-05,
+      "p_value": 0.20461040003907904,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "all_four",
+      "regime_name": "routine_high_corr",
+      "mean_brier_baseline": 0.07701488225328111,
+      "mean_brier_mix": 0.0715164086775963,
+      "mean_delta": 0.005498473575684821,
+      "ci_low": 0.00487810954028759,
+      "ci_high": 0.006118837611082052,
+      "p_value": 3.1828730939913453e-32,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "mix_name": "plus_tail",
+      "regime_name": "tail_low_corr",
+      "mean_brier_baseline": 0.03004916920268101,
+      "mean_brier_mix": 0.03021441019055953,
+      "mean_delta": -0.0001652409878785201,
+      "ci_low": -0.00031263201777213497,
+      "ci_high": -1.78499579849052e-05,
+      "p_value": 0.028384656998117267,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "regime_name": "tail_low_corr",
+      "mean_brier_baseline": 0.03004916920268101,
+      "mean_brier_mix": 0.03033103049030174,
+      "mean_delta": -0.00028186128762073263,
+      "ci_low": -0.0003668859291038397,
+      "ci_high": -0.0001968366461376255,
+      "p_value": 2.2771784056042923e-09,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "mix_name": "plus_cross",
+      "regime_name": "tail_low_corr",
+      "mean_brier_baseline": 0.03004916920268101,
+      "mean_brier_mix": 0.03008298835910858,
+      "mean_delta": -3.3819156427568025e-05,
+      "ci_low": -9.568733641712923e-05,
+      "ci_high": 2.804902356199318e-05,
+      "p_value": 0.2807165604020206,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "all_four",
+      "regime_name": "tail_low_corr",
+      "mean_brier_baseline": 0.03004916920268101,
+      "mean_brier_mix": 0.027291411312392072,
+      "mean_delta": 0.002757757890288941,
+      "ci_low": 0.002310700204096192,
+      "ci_high": 0.0032048155764816903,
+      "p_value": 1.5783268032961998e-21,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "mix_name": "plus_tail",
+      "regime_name": "tail_high_corr",
+      "mean_brier_baseline": 0.07710873134399251,
+      "mean_brier_mix": 0.07709633487760126,
+      "mean_delta": 1.2396466391281303e-05,
+      "ci_low": -0.00013823733507072592,
+      "ci_high": 0.00016303026785328853,
+      "p_value": 0.8706214914829657,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "regime_name": "tail_high_corr",
+      "mean_brier_baseline": 0.07710873134399251,
+      "mean_brier_mix": 0.07713798212404882,
+      "mean_delta": -2.9250780056288948e-05,
+      "ci_low": -8.812832956089108e-05,
+      "ci_high": 2.9626769448313184e-05,
+      "p_value": 0.3266476567588865,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "plus_cross",
+      "regime_name": "tail_high_corr",
+      "mean_brier_baseline": 0.07710873134399251,
+      "mean_brier_mix": 0.07710061752814594,
+      "mean_delta": 8.113815846583758e-06,
+      "ci_low": -2.136625149334921e-05,
+      "ci_high": 3.759388318651673e-05,
+      "p_value": 0.5862139950146348,
+      "n_seeds": 100,
+      "significant_05": false
+    },
+    {
+      "mix_name": "all_four",
+      "regime_name": "tail_high_corr",
+      "mean_brier_baseline": 0.07710873134399251,
+      "mean_brier_mix": 0.07160062942279095,
+      "mean_delta": 0.0055081019212015695,
+      "ci_low": 0.0048572202738146305,
+      "ci_high": 0.0061589835685885086,
+      "p_value": 9.945569202500677e-31,
+      "n_seeds": 100,
+      "significant_05": true
+    }
+  ],
+  "metric_2_diversity": [
+    {
+      "regime_name": "routine_low_corr",
+      "mean_brier_naive": 0.03024218483936649,
+      "mean_brier_all_four": 0.027494627161888895,
+      "diversity_gain": 0.002747557677477602,
+      "diversity_gain_pct": 9.085182476304041,
+      "p_value": 3.230070187123878e-22,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "regime_name": "routine_high_corr",
+      "mean_brier_naive": 0.07701488225328111,
+      "mean_brier_all_four": 0.0715164086775963,
+      "diversity_gain": 0.005498473575684821,
+      "diversity_gain_pct": 7.139494880485345,
+      "p_value": 3.1828730939913453e-32,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "regime_name": "tail_low_corr",
+      "mean_brier_naive": 0.03004916920268101,
+      "mean_brier_all_four": 0.027291411312392072,
+      "diversity_gain": 0.002757757890288941,
+      "diversity_gain_pct": 9.17748464753858,
+      "p_value": 1.5783268032961998e-21,
+      "n_seeds": 100,
+      "significant_05": true
+    },
+    {
+      "regime_name": "tail_high_corr",
+      "mean_brier_naive": 0.07710873134399251,
+      "mean_brier_all_four": 0.07160062942279095,
+      "diversity_gain": 0.0055081019212015695,
+      "diversity_gain_pct": 7.143292108683749,
+      "p_value": 9.945569202500677e-31,
+      "n_seeds": 100,
+      "significant_05": true
+    }
+  ],
+  "metric_3_tail_regime": [
+    {
+      "mix_name": "all_four",
+      "regime_name": "routine_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.49430768509297224,
+      "mean_gap": 0.362484762242533,
+      "mean_excess_gap": 0.1721131395691101
+    },
+    {
+      "mix_name": "all_four",
+      "regime_name": "routine_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5003701588653595,
+      "mean_gap": 0.3502112328512548,
+      "mean_excess_gap": 0.16787782855521155
+    },
+    {
+      "mix_name": "all_four",
+      "regime_name": "tail_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.49373858415272615,
+      "mean_gap": 0.36257653772580223,
+      "mean_excess_gap": 0.17220491505237925
+    },
+    {
+      "mix_name": "all_four",
+      "regime_name": "tail_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5021833631348109,
+      "mean_gap": 0.3505556552922972,
+      "mean_excess_gap": 0.16822225099625404
+    },
+    {
+      "mix_name": "naive_only",
+      "regime_name": "routine_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.4952257537411042,
+      "mean_gap": 0.3740227044708456,
+      "mean_excess_gap": 0.18365108179742265
+    },
+    {
+      "mix_name": "naive_only",
+      "regime_name": "routine_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5016101830830428,
+      "mean_gap": 0.3622212417968909,
+      "mean_excess_gap": 0.17988783750084775
+    },
+    {
+      "mix_name": "naive_only",
+      "regime_name": "tail_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.4947766049333073,
+      "mean_gap": 0.3745454202422348,
+      "mean_excess_gap": 0.1841737975688118
+    },
+    {
+      "mix_name": "naive_only",
+      "regime_name": "tail_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5027205138063574,
+      "mean_gap": 0.3618713785287637,
+      "mean_excess_gap": 0.17953797423272053
+    },
+    {
+      "mix_name": "noise_only",
+      "regime_name": "routine_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.4999343136782454,
+      "mean_gap": 0.4203349940282823,
+      "mean_excess_gap": 0.22996337135485928
+    },
+    {
+      "mix_name": "noise_only",
+      "regime_name": "routine_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.49943327189165326,
+      "mean_gap": 0.41265773701994657,
+      "mean_excess_gap": 0.23032433272390337
+    },
+    {
+      "mix_name": "noise_only",
+      "regime_name": "tail_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.4992583146933032,
+      "mean_gap": 0.4207490100549831,
+      "mean_excess_gap": 0.23037738738156013
+    },
+    {
+      "mix_name": "noise_only",
+      "regime_name": "tail_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.49959634949949233,
+      "mean_gap": 0.4126301525138431,
+      "mean_excess_gap": 0.23029674821779994
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "regime_name": "routine_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.4952614036152803,
+      "mean_gap": 0.37401922222593104,
+      "mean_excess_gap": 0.18364759955250803
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "regime_name": "routine_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5013017872635074,
+      "mean_gap": 0.3628933523323821,
+      "mean_excess_gap": 0.18055994803633893
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "regime_name": "tail_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.4947283314279361,
+      "mean_gap": 0.37447863254641023,
+      "mean_excess_gap": 0.18410700987298723
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "regime_name": "tail_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5024409045692865,
+      "mean_gap": 0.36273556246581307,
+      "mean_excess_gap": 0.18040215816976987
+    },
+    {
+      "mix_name": "plus_cross",
+      "regime_name": "routine_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.495240950537958,
+      "mean_gap": 0.3740247746726385,
+      "mean_excess_gap": 0.18365315199921553
+    },
+    {
+      "mix_name": "plus_cross",
+      "regime_name": "routine_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5014594438152759,
+      "mean_gap": 0.3623442451411127,
+      "mean_excess_gap": 0.1800108408450695
+    },
+    {
+      "mix_name": "plus_cross",
+      "regime_name": "tail_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.49476404940936386,
+      "mean_gap": 0.3745417308793038,
+      "mean_excess_gap": 0.18417010820588087
+    },
+    {
+      "mix_name": "plus_cross",
+      "regime_name": "tail_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5026352292391765,
+      "mean_gap": 0.3619964907947017,
+      "mean_excess_gap": 0.17966308649865853
+    },
+    {
+      "mix_name": "plus_tail",
+      "regime_name": "routine_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.49557508239604536,
+      "mean_gap": 0.37406637657711644,
+      "mean_excess_gap": 0.18369475390369341
+    },
+    {
+      "mix_name": "plus_tail",
+      "regime_name": "routine_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5009808541401398,
+      "mean_gap": 0.3625655808885983,
+      "mean_excess_gap": 0.1802321765925551
+    },
+    {
+      "mix_name": "plus_tail",
+      "regime_name": "tail_high_corr",
+      "n_tail_markets": 206,
+      "mean_p_star": 0.4583758844078016,
+      "mean_final_price": 0.49508083761836946,
+      "mean_gap": 0.3743053505280503,
+      "mean_excess_gap": 0.18393372785462733
+    },
+    {
+      "mix_name": "plus_tail",
+      "regime_name": "tail_low_corr",
+      "n_tail_markets": 52,
+      "mean_p_star": 0.5029298868038996,
+      "mean_final_price": 0.5015772859428901,
+      "mean_gap": 0.36294751672820025,
+      "mean_excess_gap": 0.18061411243215705
+    }
+  ],
+  "metric_4_correlation": [
+    {
+      "mix_name": "noise_only",
+      "high": 0.1016713694231644,
+      "low": 0.04483620666940048,
+      "high_low_ratio": 2.2676175567848027
+    },
+    {
+      "mix_name": "naive_only",
+      "high": 0.07706180679863682,
+      "low": 0.030145677021023755,
+      "high_low_ratio": 2.556313687859573
+    },
+    {
+      "mix_name": "plus_tail",
+      "high": 0.07702289909917814,
+      "low": 0.030295920583906996,
+      "high_low_ratio": 2.54235215879501
+    },
+    {
+      "mix_name": "plus_aggregation",
+      "high": 0.07708374946312085,
+      "low": 0.030404503551690686,
+      "high_low_ratio": 2.535274069911084
+    },
+    {
+      "mix_name": "plus_cross",
+      "high": 0.07704762705592758,
+      "low": 0.030171915095983562,
+      "high_low_ratio": 2.5536207035855023
+    },
+    {
+      "mix_name": "all_four",
+      "high": 0.07155851905019363,
+      "low": 0.027393019237140482,
+      "high_low_ratio": 2.6122903222428255
+    }
+  ],
+  "config": {
+    "tail_threshold": 0.35,
+    "lslmsr_ceiling": 0.7310585786300049,
+    "mix_order": [
+      "noise_only",
+      "naive_only",
+      "plus_tail",
+      "plus_aggregation",
+      "plus_cross",
+      "all_four"
+    ],
+    "regime_order": [
+      "routine_low_corr",
+      "routine_high_corr",
+      "tail_low_corr",
+      "tail_high_corr"
+    ]
+  }
+}
