@@ -368,7 +368,12 @@ class NoiseTrader:
         )
 
 
-Agent = Union[NaiveCredentialedAgent, NoiseTrader, "AggregationDepthAgent"]
+Agent = Union[
+    NaiveCredentialedAgent,
+    NoiseTrader,
+    "AggregationDepthAgent",
+    "TailEventReasoningAgent",
+]
 
 
 # -----------------------------------------------------------------------------
@@ -626,6 +631,193 @@ def make_aggregation_depth_pool(
         )
         for i in range(n_agents)
     ]
+
+
+# -----------------------------------------------------------------------------
+# Tail-event reasoning agent
+# -----------------------------------------------------------------------------
+
+@dataclass
+class TailEventReasoningAgent:
+    """
+    Tail-event reasoning agent.
+
+    Differs from NaiveCredentialedAgent in two intentional ways, both rooted
+    in "correct Bayesian inference with informed prior":
+
+      1. Prior mean per market is logit(base_rate_m), drawn from the agent's
+         precomputed base-rate library, instead of anchored at logit(0) =
+         probability 0.5. So when p* is in the tail, the prior is in the
+         tail — no modal anchor.
+
+      2. Posterior updates use signal.noise_std DIRECTLY as the inverse
+         precision, rather than a fixed signal_precision_assumed. Tail
+         signals carry σ_tail ≈ 0.4 (precision ≈ 6.25) vs routine signals
+         at σ_routine ≈ 1.0 (precision 1.0). The agent automatically weights
+         tail signals ~6x more — naive credentialed treats them identically.
+
+    Together these produce the "reaches the tail outcome" behavior the
+    handoff calls out for Metric 3, where naive-credentialed-only populations
+    fail to push prices into the tail even when truth is there.
+
+    Observation is INSTANT (this is a Bayesian agent — no human reaction
+    lag). Review interval is moderate (1000 ticks = 1 unit time by default).
+    """
+    agent_id: int
+    budget: float
+    market_ids: tuple[int, ...]
+    base_rates: dict           # {market_id: prior_probability in (0, 1)}
+    observation_delay: int = 0
+    review_interval: int = 1000
+    prior_precision: float = 1.0       # weaker than naive's 5.0 — data drives
+    disagreement_threshold: float = 0.05
+    trade_size: float = 1.0
+    safety_margin: float = 1.2
+
+    # Internal state
+    deployed: float = field(default=0.0, init=False)
+    pending_cost: float = field(default=0.0, init=False)
+    _posterior_mean: dict = field(default_factory=dict, init=False)
+    _posterior_precision: dict = field(default_factory=dict, init=False)
+
+    # Population dispatch knobs (uniform interface)
+    arrival_rate_per_unit: float = field(default=0.0, init=False)
+
+    def __post_init__(self) -> None:
+        if not self.market_ids:
+            raise ValueError("market_ids must be non-empty")
+        if self.observation_delay < 0:
+            raise ValueError("observation_delay must be non-negative")
+        if self.review_interval < 0:
+            raise ValueError("review_interval must be non-negative")
+        if self.prior_precision <= 0:
+            raise ValueError("prior_precision must be positive")
+        if self.disagreement_threshold < 0:
+            raise ValueError("disagreement_threshold must be non-negative")
+        if self.trade_size <= 0:
+            raise ValueError("trade_size must be positive")
+        if self.safety_margin < 1.0:
+            raise ValueError("safety_margin must be >= 1.0")
+        self.market_ids = tuple(self.market_ids)
+        # Validate base_rates covers all primary markets and produce logit-space priors
+        for m in self.market_ids:
+            if m not in self.base_rates:
+                raise ValueError(f"base_rates missing entry for market {m}")
+            p = self.base_rates[m]
+            if not (0.0 < p < 1.0):
+                raise ValueError(
+                    f"base_rates[{m}] = {p} must be in open interval (0, 1)"
+                )
+            self._posterior_mean[m] = math.log(p / (1.0 - p))
+            self._posterior_precision[m] = self.prior_precision
+
+    @property
+    def available(self) -> float:
+        return self.budget - self.deployed - self.pending_cost
+
+    def observes(self, market_id: int) -> bool:
+        return market_id in self._posterior_mean
+
+    def posterior(self, market_id: int) -> tuple[float, float]:
+        return self._posterior_mean[market_id], self._posterior_precision[market_id]
+
+    def update_posterior(self, signal: Signal) -> None:
+        """
+        Precision-weighted Bayesian update using the signal's ACTUAL noise_std.
+
+        τ_signal = 1 / σ²
+        τ_new    = τ_old + τ_signal
+        μ_new    = (τ_old · μ_old + τ_signal · s) / τ_new
+        """
+        if signal.market_id not in self._posterior_mean:
+            return
+        if signal.noise_std <= 0:
+            return
+        m = signal.market_id
+        tau_s = 1.0 / (signal.noise_std * signal.noise_std)
+        old_mu = self._posterior_mean[m]
+        old_tau = self._posterior_precision[m]
+        new_tau = old_tau + tau_s
+        new_mu = (old_tau * old_mu + tau_s * signal.value) / new_tau
+        self._posterior_mean[m] = new_mu
+        self._posterior_precision[m] = new_tau
+
+    def decide(
+        self,
+        sim: Simulator,
+        signal: Signal,
+        market_env: MarketEnvironment,
+    ) -> Optional[TradeRequest]:
+        self.update_posterior(signal)
+        return self._consider_trade(signal.market_id, market_env)
+
+    def review(
+        self,
+        sim: Simulator,
+        market_env: MarketEnvironment,
+    ) -> list[TradeRequest]:
+        out: list[TradeRequest] = []
+        for m_id in self.market_ids:
+            req = self._consider_trade(m_id, market_env)
+            if req is not None:
+                out.append(req)
+        return out
+
+    def fire_noise(self, sim: Simulator, market_env: MarketEnvironment) -> None:
+        return None
+
+    def _consider_trade(
+        self,
+        market_id: int,
+        market_env: MarketEnvironment,
+    ) -> Optional[TradeRequest]:
+        req, cost = _consider_trade_helper(
+            agent_id=self.agent_id,
+            market_id=market_id,
+            posterior_mean=self._posterior_mean[market_id],
+            market_env=market_env,
+            disagreement_threshold=self.disagreement_threshold,
+            trade_size=self.trade_size,
+            safety_margin=self.safety_margin,
+            available=self.available,
+        )
+        if req is not None:
+            self.pending_cost += cost
+        return req
+
+
+def base_rates_from_truth(
+    info_env: "InformationEnvironment",
+    market_ids: tuple[int, ...],
+    rng: "np.random.Generator",
+    noise_std: float = 0.5,
+    clip: float = 0.01,
+) -> dict:
+    """
+    Produce noisy base-rate estimates of p* for a set of markets.
+
+    For each market m:
+        noisy_logit_m = info_env.truths[m].logit_p_star + N(0, noise_std²)
+        base_rate_m   = clip(sigmoid(noisy_logit_m), clip, 1 - clip)
+
+    Models "agent has historical priors that approximate p* with error."
+    noise_std = 0 returns truth; larger noise_std gives more agnostic priors.
+    Clipping prevents pathological priors at exactly 0 or 1.
+
+    Caller passes their own RNG so determinism doesn't depend on whether
+    this helper is called before or after info_env construction.
+    """
+    if noise_std < 0:
+        raise ValueError("noise_std must be non-negative")
+    if not (0 <= clip < 0.5):
+        raise ValueError("clip must be in [0, 0.5)")
+    out: dict = {}
+    for m in market_ids:
+        true_logit = info_env.truths[m].logit_p_star
+        noisy_logit = true_logit + float(rng.normal(0.0, noise_std)) if noise_std > 0 else true_logit
+        p = 1.0 / (1.0 + math.exp(-noisy_logit))
+        out[m] = max(clip, min(1.0 - clip, p))
+    return out
 
 
 # -----------------------------------------------------------------------------

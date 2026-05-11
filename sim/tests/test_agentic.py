@@ -21,7 +21,9 @@ from sim.agentic import (
     AggregationDepthAgent,
     NaiveCredentialedAgent,
     NoiseTrader,
+    TailEventReasoningAgent,
     _sigmoid,
+    base_rates_from_truth,
     cross_weights_from_loadings,
     make_aggregation_depth_pool,
 )
@@ -816,5 +818,365 @@ class TestAggregationDepthIntegration:
 
         a = run(seed=42)
         b = run(seed=42)
+        assert a == b
+        assert len(a) > 0
+
+
+# =============================================================================
+# Task 6: TailEventReasoningAgent
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Validation
+# -----------------------------------------------------------------------------
+
+class TestTailEventValidation:
+    def test_requires_market_ids(self):
+        with pytest.raises(ValueError, match="market_ids"):
+            TailEventReasoningAgent(
+                agent_id=0, budget=100.0, market_ids=(), base_rates={},
+            )
+
+    def test_requires_base_rate_for_every_primary(self):
+        with pytest.raises(ValueError, match="base_rates missing"):
+            TailEventReasoningAgent(
+                agent_id=0, budget=100.0,
+                market_ids=(0, 1), base_rates={0: 0.7},  # missing 1
+            )
+
+    def test_rejects_base_rate_out_of_open_interval(self):
+        for bad in (0.0, 1.0, -0.1, 1.5):
+            with pytest.raises(ValueError, match="open interval"):
+                TailEventReasoningAgent(
+                    agent_id=0, budget=100.0,
+                    market_ids=(0,), base_rates={0: bad},
+                )
+
+    def test_initial_posterior_at_logit_of_base_rate(self):
+        a = TailEventReasoningAgent(
+            agent_id=0, budget=100.0,
+            market_ids=(0, 1), base_rates={0: 0.9, 1: 0.2},
+        )
+        mu0, _ = a.posterior(0)
+        mu1, _ = a.posterior(1)
+        assert mu0 == pytest.approx(math.log(0.9 / 0.1), rel=1e-12)
+        assert mu1 == pytest.approx(math.log(0.2 / 0.8), rel=1e-12)
+        # And probability recovery confirms it
+        assert _sigmoid(mu0) == pytest.approx(0.9, rel=1e-12)
+        assert _sigmoid(mu1) == pytest.approx(0.2, rel=1e-12)
+
+
+# -----------------------------------------------------------------------------
+# Posterior update uses signal.noise_std
+# -----------------------------------------------------------------------------
+
+class TestTailEventPosteriorMath:
+    def test_routine_signal_uses_noise_std_one(self):
+        """Routine signal (σ=1.0) contributes τ_s = 1.0 to precision."""
+        a = TailEventReasoningAgent(
+            agent_id=0, budget=100.0, market_ids=(0,),
+            base_rates={0: 0.5},  # logit 0
+            prior_precision=2.0,
+        )
+        a.update_posterior(Signal(market_id=0, value=2.0, is_tail=False, noise_std=1.0))
+        mu, tau = a.posterior(0)
+        # τ_new = 2 + 1 = 3, μ_new = (2·0 + 1·2)/3 = 2/3
+        assert tau == pytest.approx(3.0, rel=1e-12)
+        assert mu == pytest.approx(2.0 / 3.0, rel=1e-12)
+
+    def test_tail_signal_contributes_more_precision(self):
+        """Tail signal (σ=0.4) contributes τ_s = 1/0.16 = 6.25 to precision."""
+        a = TailEventReasoningAgent(
+            agent_id=0, budget=100.0, market_ids=(0,),
+            base_rates={0: 0.5},
+            prior_precision=2.0,
+        )
+        a.update_posterior(Signal(market_id=0, value=2.0, is_tail=True, noise_std=0.4))
+        mu, tau = a.posterior(0)
+        # τ_new = 2 + 6.25 = 8.25, μ_new = (2·0 + 6.25·2)/8.25 = 12.5/8.25
+        assert tau == pytest.approx(8.25, rel=1e-12)
+        assert mu == pytest.approx(12.5 / 8.25, rel=1e-12)
+
+    def test_one_tail_signal_dominates_many_routine(self):
+        """Compare cumulative effect: 1 tail vs N routine signals at value 2.0."""
+        a_tail = TailEventReasoningAgent(
+            agent_id=0, budget=100.0, market_ids=(0,),
+            base_rates={0: 0.5}, prior_precision=2.0,
+        )
+        a_routine = TailEventReasoningAgent(
+            agent_id=0, budget=100.0, market_ids=(0,),
+            base_rates={0: 0.5}, prior_precision=2.0,
+        )
+        a_tail.update_posterior(Signal(market_id=0, value=2.0, is_tail=True, noise_std=0.4))
+        # One tail-signal posterior: 12.5/8.25 ≈ 1.515
+        # For routine to reach similar mean, need many signals:
+        for _ in range(3):
+            a_routine.update_posterior(Signal(market_id=0, value=2.0, is_tail=False, noise_std=1.0))
+        # 3 routine signals: τ=5, μ = 6/5 = 1.2 — still BELOW 1 tail signal's 1.515
+        assert a_tail.posterior(0)[0] > a_routine.posterior(0)[0]
+
+    def test_ignores_unobserved_market(self):
+        a = TailEventReasoningAgent(
+            agent_id=0, budget=100.0, market_ids=(0,), base_rates={0: 0.5},
+        )
+        before = a.posterior(0)
+        a.update_posterior(Signal(market_id=99, value=10.0, is_tail=False, noise_std=1.0))
+        assert a.posterior(0) == before
+
+
+# -----------------------------------------------------------------------------
+# Behavioral contrast vs naive credentialed
+# -----------------------------------------------------------------------------
+
+class TestTailEventVsNaive:
+    def test_tail_aware_doesnt_anchor_when_truth_is_tail(self):
+        """
+        Same fixed-value signals, same horizon — tail-aware (informed prior +
+        correct weighting) ends near tail truth; naive credentialed (modal
+        prior + fixed precision) does not.
+
+        Signals are fixed at value 2.2 (true logit) to remove sampling noise
+        and isolate the prior/precision behavior. 2 tail + 6 routine = 8
+        signals total, chosen so the prior still meaningfully contributes
+        to both posteriors (with N≫1 signals, both agents converge to
+        the same point regardless of prior).
+        """
+        true_logit = 2.2
+
+        tail = TailEventReasoningAgent(
+            agent_id=0, budget=100.0, market_ids=(0,),
+            base_rates={0: 0.85},  # informed-tail prior, logit ≈ 1.735
+            prior_precision=1.0,
+        )
+        naive = NaiveCredentialedAgent(
+            agent_id=0, budget=100.0, market_ids=(0,),
+            prior_precision=5.0,                # strong modal anchor
+            signal_precision_assumed=1.0,
+        )
+
+        for i in range(8):
+            is_tail = (i % 4 == 0)
+            s = Signal(
+                market_id=0, value=true_logit,
+                is_tail=is_tail, noise_std=0.4 if is_tail else 1.0,
+            )
+            tail.update_posterior(s)
+            naive.update_posterior(s)
+
+        p_tail = _sigmoid(tail.posterior(0)[0])
+        p_naive = _sigmoid(naive.posterior(0)[0])
+        # Theoretical: p_tail ≈ 0.90, p_naive ≈ 0.79.
+        assert p_tail > 0.85, f"tail-aware posterior {p_tail:.3f}, expected near 0.9"
+        assert p_naive < p_tail - 0.05, (
+            f"naive {p_naive:.3f} vs tail {p_tail:.3f} — expected naive ≥0.05 lower"
+        )
+
+
+# -----------------------------------------------------------------------------
+# Trade behavior
+# -----------------------------------------------------------------------------
+
+class TestTailEventTrade:
+    def test_trades_when_posterior_diverges_from_market(self):
+        a = TailEventReasoningAgent(
+            agent_id=0, budget=100.0, market_ids=(0,),
+            base_rates={0: 0.85},  # prior already says YES is more likely
+            disagreement_threshold=0.02, trade_size=1.0,
+        )
+        # Market still at 0.5 (no trades yet), agent's prior is at 0.85 → buys YES
+        env = MarketEnvironment(n_markets=1, spec=MarketSpec(retreat_enabled=False))
+        sim = Simulator(rng=np.random.default_rng(0))
+        # Trigger review path directly
+        trades = a.review(sim, env)
+        assert len(trades) == 1
+        assert trades[0].is_yes is True
+        assert trades[0].market_id == 0
+
+    def test_no_trade_when_prior_matches_market(self):
+        a = TailEventReasoningAgent(
+            agent_id=0, budget=100.0, market_ids=(0,),
+            base_rates={0: 0.50},  # prior at 0.5
+            disagreement_threshold=0.05,
+        )
+        env = MarketEnvironment(n_markets=1, spec=MarketSpec(retreat_enabled=False))
+        sim = Simulator(rng=np.random.default_rng(0))
+        trades = a.review(sim, env)
+        assert trades == []
+
+
+# -----------------------------------------------------------------------------
+# base_rates_from_truth helper
+# -----------------------------------------------------------------------------
+
+class TestBaseRatesFromTruth:
+    def test_zero_noise_returns_truth(self):
+        cfg = InformationConfig(
+            k=2,
+            clusters=[ClusterSpec(primary_factor=0, market_count=2)],
+        )
+        info_env = InformationEnvironment(cfg, np.random.default_rng(0))
+        rng = np.random.default_rng(0)  # separate rng
+        rates = base_rates_from_truth(info_env, (0, 1), rng, noise_std=0.0)
+        for m in (0, 1):
+            assert rates[m] == pytest.approx(info_env.truths[m].p_star, rel=1e-9)
+
+    def test_clipping_keeps_rates_in_open_interval(self):
+        cfg = InformationConfig(
+            k=2,
+            clusters=[ClusterSpec(primary_factor=0, market_count=1,
+                                   primary_loading_mean=10.0)],  # extreme — p* ≈ 1
+        )
+        info_env = InformationEnvironment(cfg, np.random.default_rng(0))
+        rng = np.random.default_rng(0)
+        rates = base_rates_from_truth(info_env, (0,), rng, noise_std=0.0, clip=0.01)
+        # p* ≈ 1 but clipped to 0.99
+        assert 0.0 < rates[0] < 1.0
+        assert rates[0] <= 0.99 + 1e-9
+
+    def test_rejects_negative_noise(self):
+        cfg = InformationConfig(k=2, n_independent_markets=1)
+        info_env = InformationEnvironment(cfg, np.random.default_rng(0))
+        with pytest.raises(ValueError):
+            base_rates_from_truth(info_env, (0,), np.random.default_rng(0), noise_std=-0.1)
+
+    def test_noisy_rates_concentrate_around_truth(self):
+        """Across many seeds, average noisy rate should be close to truth."""
+        cfg = InformationConfig(
+            k=2,
+            clusters=[ClusterSpec(primary_factor=0, market_count=1,
+                                   primary_loading_mean=1.0, primary_loading_std=0.05)],
+            idiosyncratic_std=0.05,
+        )
+        info_env = InformationEnvironment(cfg, np.random.default_rng(42))
+        p_truth = info_env.truths[0].p_star
+        samples = []
+        for s in range(200):
+            r = base_rates_from_truth(
+                info_env, (0,), np.random.default_rng(s), noise_std=0.5
+            )
+            samples.append(r[0])
+        # Logit-space symmetry means avg in prob space may shift slightly
+        # but should be near truth within 0.05
+        assert abs(float(np.mean(samples)) - p_truth) < 0.05
+
+
+# -----------------------------------------------------------------------------
+# Integration: tail-aware beats naive on a real tail-market scenario
+# -----------------------------------------------------------------------------
+
+class TestTailEventIntegration:
+    """
+    The Metric-3 test from the handoff at integration scale.
+
+    Note: LS-LMSR with alpha=1.0 has a price ceiling of sigmoid(1) ≈ 0.731
+    because b = alpha·(q_y + q_n) implies |q_y - q_n|/b ≤ 1 strictly. So we
+    do NOT assert "tail-aware reaches the tail" in absolute terms — that's
+    geometrically impossible. We assert the comparative claim from the
+    handoff: tail-aware lands meaningfully closer to p* than naive does in
+    the same tail-market scenario.
+    """
+    # Seed 6 produces p_star ≈ 0.969 under the cfg below — found by sweep.
+    TAIL_SEED = 6
+
+    def _make_cfg(self):
+        return InformationConfig(
+            k=2,
+            clusters=[ClusterSpec(primary_factor=0, market_count=1,
+                                   primary_loading_mean=3.0, primary_loading_std=0.05)],
+            idiosyncratic_std=0.2,
+            routine_rate_per_market=5.0, tail_rate_per_market=0.5,
+            signal_noise_std=0.7, tail_noise_std=0.3,
+        )
+
+    def _run(self, make_agents, horizon=10_000):
+        rng = np.random.default_rng(self.TAIL_SEED)
+        info_env = InformationEnvironment(self._make_cfg(), rng)
+        market_env = MarketEnvironment(n_markets=info_env.n_markets, spec=MarketSpec())
+        agents = make_agents(info_env, rng)
+        pop = AgentPopulation(agents)
+        sim = Simulator(rng=rng, time_resolution=1000)
+        market_env.register(sim)
+        pop.register(sim, market_env, until_ts=horizon)
+        info_env.schedule_signals(sim, until_ts=horizon)
+        sim.run_until(horizon)
+        return info_env, market_env, agents
+
+    def test_seed_actually_produces_tail_market(self):
+        """Sanity check: TAIL_SEED really gives p_star > 0.85."""
+        rng = np.random.default_rng(self.TAIL_SEED)
+        info_env = InformationEnvironment(self._make_cfg(), rng)
+        assert info_env.truths[0].p_star > 0.85
+
+    def test_tail_aware_posteriors_closer_to_truth_than_naive(self):
+        """
+        The Metric-3 claim at the agent-belief level.
+
+        Note: with fixed trade_size, two agent types that BOTH believe p_post
+        >> p_market will buy the same number of YES shares regardless of
+        belief magnitude — so market price tends to identical levels across
+        the two populations. The differentiation lives in agent posteriors,
+        which is also what Brier-score analysis (Metric 1) will measure.
+        Confidence-weighted sizing could lift this to a market-level
+        differentiation; that's a separate design choice not in Task 6 scope.
+        """
+        def make_tail_agents(info_env, _rng):
+            rates_rng = np.random.default_rng(self.TAIL_SEED + 1000)
+            base = base_rates_from_truth(info_env, (0,), rates_rng, noise_std=0.3)
+            return [
+                TailEventReasoningAgent(
+                    agent_id=i, budget=200.0, market_ids=(0,),
+                    base_rates=base, prior_precision=1.0,
+                    review_interval=1000, disagreement_threshold=0.02,
+                    trade_size=1.0,
+                )
+                for i in range(3)
+            ]
+
+        def make_naive_agents(info_env, _rng):
+            return [
+                NaiveCredentialedAgent(
+                    agent_id=i, budget=200.0, market_ids=(0,),
+                    observation_delay=100, review_interval=1000,
+                    prior_precision=5.0, signal_precision_assumed=1.0,
+                    disagreement_threshold=0.02, trade_size=1.0,
+                )
+                for i in range(3)
+            ]
+
+        info_env_t, _, agents_t = self._run(make_tail_agents)
+        info_env_n, _, agents_n = self._run(make_naive_agents)
+        p_star = info_env_t.truths[0].p_star
+        assert info_env_n.truths[0].p_star == p_star
+        logit_truth = math.log(p_star / (1.0 - p_star))
+
+        avg_mu_tail = float(np.mean([a._posterior_mean[0] for a in agents_t]))
+        avg_mu_naive = float(np.mean([a._posterior_mean[0] for a in agents_n]))
+
+        gap_tail = abs(avg_mu_tail - logit_truth)
+        gap_naive = abs(avg_mu_naive - logit_truth)
+        # Tail-aware should be meaningfully closer to truth in logit space
+        assert gap_tail < gap_naive - 0.05, (
+            f"tail-aware logit gap {gap_tail:.3f} vs naive {gap_naive:.3f}; "
+            f"truth_logit={logit_truth:.3f}, tail_avg={avg_mu_tail:.3f}, "
+            f"naive_avg={avg_mu_naive:.3f}"
+        )
+
+    def test_determinism_with_tail_pool(self):
+        def make_agents(info_env, _rng):
+            base = base_rates_from_truth(
+                info_env, (0,), np.random.default_rng(123), noise_std=0.3
+            )
+            return [
+                TailEventReasoningAgent(
+                    agent_id=0, budget=100.0, market_ids=(0,),
+                    base_rates=base, review_interval=1000,
+                ),
+            ]
+        _, env1, _ = self._run(make_agents, horizon=10_000)
+        _, env2, _ = self._run(make_agents, horizon=10_000)
+        a = [(r.timestamp, r.market_id, r.agent_id, r.is_yes, r.shares, r.cost)
+             for r in env1.trade_log]
+        b = [(r.timestamp, r.market_id, r.agent_id, r.is_yes, r.shares, r.cost)
+             for r in env2.trade_log]
         assert a == b
         assert len(a) > 0
