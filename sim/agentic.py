@@ -81,6 +81,23 @@ from sim.simulator import Simulator
 # Numerical helper
 # -----------------------------------------------------------------------------
 
+def _compute_trade_size(
+    base_size: float,
+    confidence_weighted: bool,
+    posterior_precision: float,
+    prior_precision: float,
+    floor: float,
+    ceiling: float,
+) -> float:
+    """Single source of truth for confidence-weighted sizing.
+    confidence_weighted=False returns base_size unchanged (v1 behavior)."""
+    if not confidence_weighted:
+        return base_size
+    relative = posterior_precision / max(prior_precision, 1e-9)
+    multiplier = float(np.clip(math.sqrt(max(relative, 0.0)), floor, ceiling))
+    return base_size * multiplier
+
+
 def _sigmoid(x: float) -> float:
     """Numerically stable sigmoid."""
     if x >= 0:
@@ -179,6 +196,10 @@ class NaiveCredentialedAgent:
     signal_precision_assumed: float = 1.0
     disagreement_threshold: float = 0.05
     trade_size: float = 1.0
+    confidence_weighted: bool = False
+    confidence_floor: float = 0.25
+    confidence_ceiling: float = 4.0
+
     safety_margin: float = 1.2
 
     # Internal state
@@ -211,6 +232,16 @@ class NaiveCredentialedAgent:
         for m in self.market_ids:
             self._posterior_mean[m] = 0.0
             self._posterior_precision[m] = self.prior_precision
+
+    def _choose_trade_size(self, posterior_precision: float) -> float:
+        return _compute_trade_size(
+            base_size=self.trade_size,
+            confidence_weighted=self.confidence_weighted,
+            posterior_precision=posterior_precision,
+            prior_precision=self.prior_precision,
+            floor=self.confidence_floor,
+            ceiling=self.confidence_ceiling,
+        )
 
     @property
     def available(self) -> float:
@@ -280,7 +311,7 @@ class NaiveCredentialedAgent:
             posterior_mean=self._posterior_mean[market_id],
             market_env=market_env,
             disagreement_threshold=self.disagreement_threshold,
-            trade_size=self.trade_size,
+            trade_size=self._choose_trade_size(self._posterior_precision[market_id]),
             safety_margin=self.safety_margin,
             available=self.available,
         )
@@ -425,6 +456,10 @@ class AggregationDepthAgent:
     signal_precision_assumed: float = 1.0
     disagreement_threshold: float = 0.05
     trade_size: float = 1.0
+    confidence_weighted: bool = False
+    confidence_floor: float = 0.25
+    confidence_ceiling: float = 4.0
+
     safety_margin: float = 1.2
     min_cross_weight: float = 0.05         # below this, treat cross-market signal as 0
 
@@ -470,6 +505,16 @@ class AggregationDepthAgent:
         for m in self.market_ids:
             self._posterior_mean[m] = 0.0
             self._posterior_precision[m] = self.prior_precision
+
+    def _choose_trade_size(self, posterior_precision: float) -> float:
+        return _compute_trade_size(
+            base_size=self.trade_size,
+            confidence_weighted=self.confidence_weighted,
+            posterior_precision=posterior_precision,
+            prior_precision=self.signal_precision_assumed,
+            floor=self.confidence_floor,
+            ceiling=self.confidence_ceiling,
+        )
 
     @property
     def available(self) -> float:
@@ -538,7 +583,7 @@ class AggregationDepthAgent:
             posterior_mean=self._posterior_mean[market_id],
             market_env=market_env,
             disagreement_threshold=self.disagreement_threshold,
-            trade_size=self.trade_size,
+            trade_size=self._choose_trade_size(self._posterior_precision[market_id]),
             safety_margin=self.safety_margin,
             available=self.available,
         )
@@ -673,6 +718,10 @@ class TailEventReasoningAgent:
     prior_precision: float = 1.0       # weaker than naive's 5.0 — data drives
     disagreement_threshold: float = 0.05
     trade_size: float = 1.0
+    confidence_weighted: bool = False
+    confidence_floor: float = 0.25
+    confidence_ceiling: float = 4.0
+
     safety_margin: float = 1.2
 
     # Internal state
@@ -711,6 +760,16 @@ class TailEventReasoningAgent:
                 )
             self._posterior_mean[m] = math.log(p / (1.0 - p))
             self._posterior_precision[m] = self.prior_precision
+
+    def _choose_trade_size(self, posterior_precision: float) -> float:
+        return _compute_trade_size(
+            base_size=self.trade_size,
+            confidence_weighted=self.confidence_weighted,
+            posterior_precision=posterior_precision,
+            prior_precision=self.prior_precision,
+            floor=self.confidence_floor,
+            ceiling=self.confidence_ceiling,
+        )
 
     @property
     def available(self) -> float:
@@ -778,7 +837,8 @@ class TailEventReasoningAgent:
             posterior_mean=self._posterior_mean[market_id],
             market_env=market_env,
             disagreement_threshold=self.disagreement_threshold,
-            trade_size=self.trade_size,
+            trade_size=self._choose_trade_size(self._posterior_precision[market_id]),
+
             safety_margin=self.safety_margin,
             available=self.available,
         )
@@ -893,6 +953,10 @@ class CrossMarketConsistencyAgent:
     signal_noise_inflation: float = 1.0    # multiplier on signal.noise_std for τ_s
     disagreement_threshold: float = 0.05
     trade_size: float = 1.0
+    confidence_weighted: bool = False
+    confidence_floor: float = 0.25
+    confidence_ceiling: float = 4.0
+
     safety_margin: float = 1.2
 
     # Internal state
@@ -959,6 +1023,24 @@ class CrossMarketConsistencyAgent:
         # Initialize posterior to prior
         self._Lambda = self.prior_precision_scale * np.eye(self._k)
         self._eta = np.zeros(self._k)
+
+    def _choose_trade_size(self, market_id: int) -> float:
+        # Posterior precision on market m's implied logit:
+        # β_m^T · Λ · β_m  (scalar)
+        if self._Lambda is not None and market_id in self.loadings:
+            beta_m = self.loadings[market_id]
+            posterior_precision = float(beta_m @ self._Lambda @ beta_m)
+        else:
+            posterior_precision = self.prior_precision_scale * max(self._k, 1)
+        prior_precision = self.prior_precision_scale * max(self._k, 1)
+        return _compute_trade_size(
+            base_size=self.trade_size,
+            confidence_weighted=self.confidence_weighted,
+            posterior_precision=posterior_precision,
+            prior_precision=prior_precision,
+            floor=self.confidence_floor,
+            ceiling=self.confidence_ceiling,
+        )
 
     @property
     def available(self) -> float:
@@ -1070,7 +1152,7 @@ class CrossMarketConsistencyAgent:
             posterior_mean=implied_logit,
             market_env=market_env,
             disagreement_threshold=self.disagreement_threshold,
-            trade_size=self.trade_size,
+            trade_size=self._choose_trade_size(market_id),
             safety_margin=self.safety_margin,
             available=self.available,
         )
