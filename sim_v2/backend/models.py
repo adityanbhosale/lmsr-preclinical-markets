@@ -78,10 +78,10 @@ class AgentConfig(BaseModel):
 class StreamConfig(BaseModel):
     """UX-only — controls wall-clock duration, not simulation outcomes."""
 
-    duration_seconds: int = Field(default=420, ge=180, le=900)  # 3-15 min
-    target_fps: int = Field(default=8, ge=2, le=30)
-    n_ensemble_seeds: int = Field(default=16, ge=4, le=64)
-    ci_band_seeds: int = Field(default=100, ge=20, le=500)
+    duration_seconds: int = Field(default=420, ge=10, le=900)    # was ge=180
+    target_fps: int = Field(default=8, ge=2, le=30)               # unchanged
+    n_ensemble_seeds: int = Field(default=16, ge=1, le=64)        # was ge=4
+    ci_band_seeds: int = Field(default=100, ge=2, le=500)         # was ge=20
 
 
 class SimRequest(BaseModel):

@@ -77,12 +77,12 @@ def _bucket_trades_by_frame(
     if not seed.trades:
         return buckets
 
-    sorted_trades = sorted(seed.trades, key=lambda t: t["tick"])
+    sorted_trades = sorted(seed.trades, key=lambda t: t["timestamp"])
     frame_idx = 0
     for trade in sorted_trades:
         while (
             frame_idx < plan.total_frames - 1
-            and trade["tick"] > plan.frame_to_tick[frame_idx]
+            and trade["timestamp"] > plan.frame_to_tick[frame_idx]
         ):
             frame_idx += 1
         buckets[frame_idx].append(trade)
@@ -102,7 +102,7 @@ def _agent_snapshots_at_frame(
     classes: dict[str, str] = {}
 
     for trade in seed.trades:
-        if trade["tick"] > up_to_tick:
+        if trade["timestamp"] > up_to_tick:
             break
         aid = trade["agent_id"]
         m = trade["market_id"]
@@ -135,7 +135,7 @@ def _agent_snapshots_at_frame(
         budget = budget_by_agent.get(aid, 100.0)
         snapshots.append(
             AgentSnapshot(
-                agent_id=aid,
+                agent_id=str(aid),
                 agent_class=classes[aid],
                 capital_deployed=float(deployed),
                 capital_remaining=float(max(0.0, budget - deployed)),
@@ -147,11 +147,24 @@ def _agent_snapshots_at_frame(
     return snapshots
 
 
-def _class_from_id(agent_id: str) -> str:
-    for cls in ("naive", "agg", "tail", "cross", "noise"):
-        if agent_id.startswith(cls):
-            return "aggregation" if cls == "agg" else cls
-    return "unknown"
+def _class_from_id(agent_id) -> str:
+    """v2 uses non-overlapping integer ID ranges per agent class:
+      0-99    naive
+      100-199 aggregation
+      200-299 tail
+      300-399 cross
+      400+    noise
+    """
+    aid = int(agent_id)
+    if aid < 100:
+        return "naive"
+    if aid < 200:
+        return "aggregation"
+    if aid < 300:
+        return "tail"
+    if aid < 400:
+        return "cross"
+    return "noise"
 
 
 def build_frames(
@@ -191,7 +204,7 @@ def build_frames(
             TradeEvent(
                 tick=t["timestamp"],
                 market_id=int(t["market_id"]),
-                agent_id=t["agent_id"],
+                agent_id=str(t["agent_id"]),
                 agent_class=_class_from_id(t["agent_id"]),
                 is_yes=bool(t["is_yes"]),
                 shares=float(t["shares"]),
