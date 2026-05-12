@@ -22,6 +22,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Iterable
+from .agent_classes import class_from_agent_id
 
 import numpy as np
 
@@ -46,25 +47,6 @@ class AgentPnL:
     no_position_value: float
 
 
-def _class_from_agent_id(agent_id) -> str:
-    """v2 uses non-overlapping integer ID ranges per agent class.
-    See sim_v2.backend.compute._build_agent_factory for the convention:
-      0-99    naive
-      100-199 aggregation
-      200-299 tail
-      300-399 cross
-      400+    noise
-    """
-    aid = int(agent_id)
-    if aid < 100:
-        return "naive"
-    if aid < 200:
-        return "aggregation"
-    if aid < 300:
-        return "tail"
-    if aid < 400:
-        return "cross"
-    return "noise"
 
 
 def settle_agents(seed_result: SeedResult) -> list[AgentPnL]:
@@ -108,7 +90,7 @@ def settle_agents(seed_result: SeedResult) -> list[AgentPnL]:
         pnls.append(
             AgentPnL(
                 agent_id=aid,
-                agent_class=_class_from_agent_id(aid),
+                agent_class=class_from_agent_id(aid),
                 realized_pnl=(yes_value + no_value) - cost,
                 total_cost=cost,
                 total_volume=volume_by_agent[aid],

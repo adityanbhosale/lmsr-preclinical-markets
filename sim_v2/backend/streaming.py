@@ -25,6 +25,7 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import AsyncIterator, Iterable
+from .agent_classes import class_from_agent_id
 
 from .compute import SeedResult, compute_ci_band
 from .models import (
@@ -114,7 +115,7 @@ def _agent_snapshots_at_frame(
         cost_by_agent[aid] += trade["cost"]
         trades_by_agent[aid] += 1
         # Recover class from agent summary
-        classes.setdefault(aid, _class_from_id(aid))
+        classes.setdefault(aid, class_from_agent_id(aid))
 
     # Need budget info — pull from agent_summary
     budget_by_agent: dict[str, float] = {
@@ -135,7 +136,7 @@ def _agent_snapshots_at_frame(
         budget = budget_by_agent.get(aid, 100.0)
         snapshots.append(
             AgentSnapshot(
-                agent_id=str(aid),
+                agent_id=(aid),
                 agent_class=classes[aid],
                 capital_deployed=float(deployed),
                 capital_remaining=float(max(0.0, budget - deployed)),
@@ -147,24 +148,7 @@ def _agent_snapshots_at_frame(
     return snapshots
 
 
-def _class_from_id(agent_id) -> str:
-    """v2 uses non-overlapping integer ID ranges per agent class:
-      0-99    naive
-      100-199 aggregation
-      200-299 tail
-      300-399 cross
-      400+    noise
-    """
-    aid = int(agent_id)
-    if aid < 100:
-        return "naive"
-    if aid < 200:
-        return "aggregation"
-    if aid < 300:
-        return "tail"
-    if aid < 400:
-        return "cross"
-    return "noise"
+
 
 
 def build_frames(
@@ -204,8 +188,8 @@ def build_frames(
             TradeEvent(
                 tick=t["timestamp"],
                 market_id=int(t["market_id"]),
-                agent_id=str(t["agent_id"]),
-                agent_class=_class_from_id(t["agent_id"]),
+                agent_id=t["agent_id"],
+                agent_class=class_from_agent_id(t["agent_id"]),
                 is_yes=bool(t["is_yes"]),
                 shares=float(t["shares"]),
                 cost=float(t["cost"]),
