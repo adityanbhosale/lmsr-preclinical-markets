@@ -73,6 +73,7 @@ const NAV: NavItem[] = [
       { title: 'Interactive Mechanism', href: '/simulation' },
       { title: 'Sweep Results (H1 + H2)', href: '/simulation#sweep-results' },
       { title: 'Agentic Sweep Results', href: '/results' },
+      { title: 'Interactive Sandbox ↗', href: '/simulator' },
     ],
   },
 

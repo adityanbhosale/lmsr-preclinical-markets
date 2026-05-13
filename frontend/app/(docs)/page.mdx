@@ -3,13 +3,13 @@ import Link from 'next/link';
 # Dual-Layer Liquidity Infrastructure for Tokenized Biotech Milestones
 
 A working architecture for **event-triggered** real-world assets — a distinct category from the yield-bearing RWAs that BUIDL, Securitize, Ondo, and JPMD have established as the foundation. Event-triggered RWAs (binary FDA outcomes, contingent milestone payments) need continuous price discovery before resolution, which the yield-bearing model wasn't designed to provide. The dual-layer architecture extends the lineage rather than replacing it.
-<div className="not-prose my-8 grid grid-cols-1 sm:grid-cols-2 gap-3">
+<div className="not-prose my-8 grid grid-cols-1 sm:grid-cols-3 gap-3">
   <Link
-    href="/markets"
-    className="group flex flex-col justify-between rounded-lg border border-neutral-900 bg-neutral-900 text-white px-5 py-4 transition-all hover:bg-black hover:border-black"
-  >
+  href="/markets"
+  className="group flex flex-col justify-between rounded-lg border border-neutral-200 px-5 py-4 transition-all hover:border-neutral-400 hover:bg-neutral-50"
+>
     <div className="flex items-baseline justify-between">
-      <span className="text-xs uppercase tracking-wider text-neutral-400">
+      <span className="text-xs uppercase tracking-wider text-neutral-500">
         Live testnet
       </span>
       <span className="text-xs text-neutral-500 group-hover:text-neutral-300 transition-colors">
@@ -17,14 +17,36 @@ A working architecture for **event-triggered** real-world assets — a distinct 
       </span>
     </div>
     <div className="mt-3">
-      <div className="text-base font-semibold">
-        Trade four live markets →
+      <div className="text-base font-semibold text-neutral-900">
+          Trade four live markets →
       </div>
-      <div className="text-sm text-neutral-400 mt-0.5">
+      <div className="text-sm text-neutral-600 mt-0.5">
         Connect a wallet, take a position, settle in USDC
       </div>
     </div>
   </Link>
+
+  <Link
+  href="/simulator"
+  className="group flex flex-col justify-between rounded-lg border border-neutral-900 bg-neutral-900 text-white px-5 py-4 transition-all hover:bg-black hover:border-black"
+>
+  <div className="flex items-baseline justify-between">
+    <span className="text-xs uppercase tracking-wider text-neutral-400">
+      Interactive sim
+    </span>
+    <span className="text-xs text-neutral-400 group-hover:text-neutral-200 transition-colors">
+      Live · Modal
+    </span>
+  </div>
+  <div className="mt-3">
+    <div className="text-base font-semibold">
+      Run findings live →
+    </div>
+    <div className="text-sm text-neutral-400 mt-0.5">
+      Watch population diversity and rent extraction stream in real-time
+    </div>
+  </div>
+</Link>
 
   <a
     href="https://github.com/adityanbhosale/lmsr-preclinical-markets"
