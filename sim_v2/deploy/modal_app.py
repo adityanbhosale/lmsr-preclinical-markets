@@ -29,26 +29,33 @@ Cost model:
 from __future__ import annotations
 
 import modal
+from pathlib import Path
+
+# Only resolves correctly at deploy time (from local repo).
+# Inside the container, __file__ is /root/modal_app.py with no parents[2].
+try:
+    _REPO_ROOT = Path(__file__).resolve().parents[2]
+except IndexError:
+    _REPO_ROOT = None  # we're inside the container; mounts already happened
 
 # ---------------------------------------------------------------------------
 # Image
 # ---------------------------------------------------------------------------
 
-image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .pip_install(
-        "fastapi[standard]>=0.110",
-        "pydantic>=2.5",
-        "uvicorn[standard]>=0.27",
-        "numpy>=1.26",
-        "pyarrow>=15.0",
-        "websockets>=12.0",
-    )
-    # Mount the repository — the v1 sim/ module is imported by v2 backend.
-    # Adjust the local path when running `modal deploy` from the repo root.
-    .add_local_dir("../sim", "/root/sim")
-    .add_local_dir(".", "/root/sim_v2/backend")
+image = modal.Image.debian_slim(python_version="3.12").pip_install(
+    "fastapi[standard]>=0.110",
+    "pydantic>=2.5",
+    "uvicorn[standard]>=0.27",
+    "numpy>=1.26",
+    "pyarrow>=15.0",
+    "websockets>=12.0",
 )
+# Only add local mounts at deploy time; skip when running inside the container.
+if _REPO_ROOT is not None:
+    image = image.add_local_dir(str(_REPO_ROOT / "sim"), "/root/sim")
+    image = image.add_local_dir(
+        str(_REPO_ROOT / "sim_v2" / "backend"), "/root/sim_v2/backend"
+    )
 
 
 app = modal.App("sim-v2", image=image)
@@ -63,7 +70,8 @@ app = modal.App("sim-v2", image=image)
     image=image,
     cpu=8.0,
     memory=4096,
-    timeout=900,  # 15 min max session
+    timeout=900,
+    min_containers=1,  # one always warm container during demo window
     # keep_warm=1, # enable during active demos to avoid cold start
 )
 @modal.asgi_app()
