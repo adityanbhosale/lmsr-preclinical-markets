@@ -93,7 +93,14 @@ export function MarketView({ frames, ciBand, maxPoints = 400 }: MarketViewProps)
   }, [ciBand, maxPoints]);
 
   // Merge band into trace so the bottom chart can read both from same data
-  const brierChartData = useMemo(() => {
+  type BrierChartRow = {
+    tick: number;
+    brier: number;
+    p025?: number;
+    p975?: number;
+    mean?: number;
+  };
+  const brierChartData = useMemo<BrierChartRow[]>(() => {
     if (bandData.length === 0) return traceData.map((t) => ({ tick: t.tick, brier: t.brier }));
 
     // Index band by tick for fast lookup
@@ -167,8 +174,9 @@ export function MarketView({ frames, ciBand, maxPoints = 400 }: MarketViewProps)
                 borderRadius: 6,
               }}
               labelFormatter={(t) => `tick ${t}`}
-              formatter={(value: number, name: string) => [value.toFixed(4), name.replace("market_", "Market ")]}
-            />
+              formatter={(value: unknown, name: unknown) =>
+                [Number(value).toFixed(4), name as string]
+              }            />
             {marketIds.map((mid, i) => (
               <Line
                 key={`line-${mid}`}
@@ -227,9 +235,10 @@ export function MarketView({ frames, ciBand, maxPoints = 400 }: MarketViewProps)
                 borderRadius: 6,
               }}
               labelFormatter={(t) => `tick ${t}`}
-              formatter={(value: number | undefined, name: string) => {
-                if (value === undefined || value === null) return ["—", name];
-                return [value.toFixed(4), name];
+              formatter={(value: unknown, name: unknown) => {
+                const nameStr = String(name);
+                if (typeof value !== "number") return ["—", nameStr];
+                return [value.toFixed(4), nameStr];
               }}
             />
             {/* CI band as filled area between p025 and p975.

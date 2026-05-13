@@ -214,10 +214,11 @@ export function PnLPanel({ finalsBySeed, totalEnsembleSeeds }: PnLPanelProps) {
                 border: "1px solid rgb(229 229 229)",
                 borderRadius: 6,
               }}
-              formatter={(value: number, _name, entry) => {
+              formatter={(value: unknown, _name: unknown, entry: unknown) => {
+                const v = typeof value === "number" ? value : 0;
                 const cls = (entry as { payload: ClassAggregate }).payload;
                 return [
-                  `${formatUsd(value)} (±${formatUsd(cls.pnl_std)})`,
+                  `${formatUsd(v)} (±${formatUsd(cls.pnl_std)})`,
                   `Mean PnL — ${CLASS_LABEL[cls.agent_class] ?? cls.agent_class}`,
                 ];
               }}
