@@ -228,30 +228,29 @@ async def stream_seed(
     seed_id: int = 0,
     amm_subsidy: float = 0.0,
 ) -> AsyncIterator:
-    """Yield CIBandFrame? No — CI band is computed across seeds, handled by caller.
-    This yields FrameMessages paced at plan.seconds_per_frame, then one FinalFrame."""
-    for frame in build_frames(seed, plan, seed_id=seed_id):
-        yield frame
-        await asyncio.sleep(plan.seconds_per_frame)
-
+    """Yield FrameMessages paced at plan.seconds_per_frame, then one FinalFrame."""
     class_pnls, rent, tail_ids, excess_gaps = settle_and_summarize(
         seed, amm_subsidy=amm_subsidy
     )
+    # NEW: list every distinct agent_id that appears in trade_log
+    trade_agents = sorted({t["agent_id"] for t in seed.trades})
+    
+    
+
+    final_aggregate_brier = 0.0
+    for frame in build_frames(seed, plan, seed_id=seed_id):
+        final_aggregate_brier = frame.aggregate_brier
+        yield frame
+        await asyncio.sleep(plan.seconds_per_frame)
+
     yield FinalFrame(
         seed_id=seed_id,
-        final_aggregate_brier=float(
-            sum(
-                (seed.price_trace[m][-1] - seed.p_star_by_market[m]) ** 2
-                for m in seed.market_ids
-            )
-            / len(seed.market_ids)
-        ),
+        final_aggregate_brier=float(final_aggregate_brier),
         pnl_by_class=class_pnls,
         rent_extraction=rent,
         tail_market_ids=tail_ids,
-        tail_market_excess_gaps={int(k): float(v) for k, v in excess_gaps.items()},
+        tail_market_excess_gaps=excess_gaps,
     )
-
 
 def build_ci_band_message(ci_results: list[SeedResult]) -> CIBandFrame:
     """Wrap compute.compute_ci_band output into a CIBandFrame."""

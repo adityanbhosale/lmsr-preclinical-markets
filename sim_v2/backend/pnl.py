@@ -74,7 +74,14 @@ def settle_agents(seed_result: SeedResult) -> list[AgentPnL]:
         volume_by_agent[aid] += abs(trade["shares"])
 
     pnls: list[AgentPnL] = []
-    for aid, by_market in positions.items():
+    # Iterate ALL agents (including non-traders), not just those with positions.
+    # An agent with no trades has empty by_market, yielding realized_pnl=0,
+    # which still surfaces the class in aggregate output. This matters for naive
+    # credentialed agents whose posterior never crosses the disagreement threshold —
+    # without this, their entire class disappears from the PnL panel (Finding 1).
+    all_agent_ids = [a["agent_id"] for a in seed_result.agent_summary]
+    for aid in all_agent_ids:
+        by_market = positions.get(aid, {})
         yes_value = 0.0
         no_value = 0.0
         cost = 0.0

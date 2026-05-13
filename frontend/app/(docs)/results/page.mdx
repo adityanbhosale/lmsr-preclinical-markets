@@ -127,7 +127,7 @@ All metric tests use **paired t-tests on seed-matched runs**. Sample size n=100 
 
 ### Finding 1: Single-specialist additions to a naive population are invisible at the market-aggregate level
 
-![Marginal Informational Contribution](results/figures/02_metric_1_marginal_contribution.png)
+![Marginal Informational Contribution](/figures/02_metric_1_marginal_contribution.png)
 
 Compared to `naive_only`, single-specialist additions produce no detectable improvement in any regime. The deltas:
 
@@ -146,7 +146,7 @@ The corollary: protocols hoping to attract "smart money" to improve price discov
 
 ### Finding 2: Population diversity wins decisively, in every regime
 
-![Brier Heatmap by Mix × Regime](results/figures/01_brier_heatmap.png)
+![Brier Heatmap by Mix × Regime](/figures/01_brier_heatmap.png)
 
 The `all_four` mix — which replaces the naive consensus with one of each specialist type plus a single naive — beats every other mix in every regime tested:
 
@@ -165,7 +165,7 @@ This generalizes to a population-design principle: protocols that achieve hetero
 
 ### Finding 3: Tail markets fail because of capital, not market structure
 
-![Tail-Regime Final Price vs Truth](results/figures/04_metric_3_tail_regime.png)
+![Tail-Regime Final Price vs Truth](/figures/04_metric_3_tail_regime.png)
 
 Across the 258 tail markets observed (52 in low-correlation regimes, 206 in high-correlation regimes), informed agents do bring prices closer to truth — but only by about 5 percentage points:
 
@@ -190,7 +190,7 @@ This is a critical operational finding. The conventional design intuition — "w
 
 ### Finding 4: Within-cluster correlation is structural, not solvable by agent sophistication
 
-![Correlation Regime Impact](results/figures/05_metric_4_correlation.png)
+![Correlation Regime Impact](/figures/05_metric_4_correlation.png)
 
 For every mix tested, high-correlation regimes are uniformly ~2.5× harder than low-correlation regimes:
 
@@ -235,7 +235,7 @@ Several design choices constrain the generalizability of these findings. We docu
 
 ## 6. Convergence dynamics
 
-![Brier Convergence Trajectories](results/figures/03_convergence_trajectories.png)
+![Brier Convergence Trajectories](/figures/03_convergence_trajectories.png)
 
 A note on dynamics that the metrics tables do not capture: every informed mix completes its price discovery within the first 5,000 ticks (1/6 of the horizon) and then plateaus. The `plus_X` lines lie almost exactly on top of `naive_only` for the full horizon, while `all_four` settles below them at the same rate.
 

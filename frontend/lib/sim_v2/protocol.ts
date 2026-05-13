@@ -1,9 +1,13 @@
 /**
- * sim_v2 frontend protocol types — mirror of backend/models.py.
+ * Protocol types — mirror of sim_v2/backend/models.py.
  *
- * Keep this file in sync with models.py. A small codegen pass via
- * datamodel-code-generator can automate this if drift becomes painful;
- * for now hand-mirror is fine since the schema is stable.
+ * Keep in sync with the backend Pydantic models. The shape here is the
+ * WebSocket contract; any drift between this file and models.py is the
+ * source of runtime validation errors.
+ *
+ * agent_id is intentionally `number`, not `string`: v2 uses non-overlapping
+ * integer ID ranges per agent class (0-99 naive, 100-199 aggregation,
+ * 200-299 tail, 300-399 cross, 400+ noise).
  */
 
 // ────────────────────────────────────────────────────────────────────
@@ -197,11 +201,33 @@ export const DEFAULT_REQUEST: SimRequest = {
     disagreement_threshold: 0.03,
   },
   stream: {
-    duration_seconds: 420,
-    target_fps: 8,
-    n_ensemble_seeds: 16,
-    ci_band_seeds: 100,
+    duration_seconds: 180,
+    target_fps: 4,
+    n_ensemble_seeds: 4,
+    ci_band_seeds: 20,
   },
-  horizon_ticks: 10_000,
+  horizon_ticks: 1000,
   base_seed: 42,
+};
+
+// ────────────────────────────────────────────────────────────────────
+// Visual constants — class palette for charts
+// ────────────────────────────────────────────────────────────────────
+
+/** Paul Tol high-contrast colorblind-friendly palette, matching v1's analysis figures. */
+export const CLASS_COLOR: Record<string, string> = {
+  naive: "#4477AA",
+  aggregation: "#EE6677",
+  tail: "#228833",
+  cross: "#CCBB44",
+  noise: "#BBBBBB",
+  unknown: "#666666",
+};
+
+export const CLASS_LABEL: Record<string, string> = {
+  naive: "Naive credentialed",
+  aggregation: "Aggregation depth",
+  tail: "Tail event",
+  cross: "Cross-market",
+  noise: "Noise",
 };
