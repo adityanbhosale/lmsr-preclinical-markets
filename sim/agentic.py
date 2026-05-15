@@ -838,7 +838,6 @@ class TailEventReasoningAgent:
             market_env=market_env,
             disagreement_threshold=self.disagreement_threshold,
             trade_size=self._choose_trade_size(self._posterior_precision[market_id]),
-
             safety_margin=self.safety_margin,
             available=self.available,
         )

@@ -56,4 +56,3 @@ print(f"    Python price after:   {price_after:.18f}")
 print(f"    Solidity price after: {solidity_after:.18f}")
 print(f"    Difference:           {abs(price_after - solidity_after):.2e}")
 
-print("\n" + "=" * 60)
